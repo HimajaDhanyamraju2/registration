@@ -17,13 +17,13 @@ import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
 
 import io.mosip.kernel.core.exception.ExceptionUtils;
 import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.kernel.core.pdfgenerator.spi.PDFGenerator;
 import io.mosip.kernel.core.util.StringUtils;
+import io.mosip.kernel.packetmanager.dto.DocumentDto;
 import io.mosip.registration.config.AppConfig;
 import io.mosip.registration.constants.AuditEvent;
 import io.mosip.registration.constants.AuditReferenceIdTypes;
@@ -35,20 +35,15 @@ import io.mosip.registration.context.ApplicationContext;
 import io.mosip.registration.context.SessionContext;
 import io.mosip.registration.controller.BaseController;
 import io.mosip.registration.controller.FXUtils;
-import io.mosip.registration.controller.device.GuardianBiometricsController;
+import io.mosip.registration.controller.device.BiometricsController;
 import io.mosip.registration.controller.device.ScanPopUpViewController;
 import io.mosip.registration.device.webcam.impl.WebcamSarxosServiceImpl;
 import io.mosip.registration.dto.UiSchemaDTO;
 import io.mosip.registration.dto.mastersync.DocumentCategoryDto;
 import io.mosip.registration.exception.RegBaseCheckedException;
-import io.mosip.kernel.packetmanager.dto.DocumentDto;
-import io.mosip.registration.service.bio.impl.BioServiceImpl;
 import io.mosip.registration.service.doc.category.DocumentCategoryService;
 import io.mosip.registration.service.sync.MasterSyncService;
 import io.mosip.registration.util.scan.DocumentScanFacade;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.value.ChangeListener;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
@@ -134,7 +129,7 @@ public class DocumentScanController extends BaseController {
 	private List<BufferedImage> scannedPages;
 
 	@Autowired
-	private GuardianBiometricsController guardianBiometricsController;
+	private BiometricsController biometricsController;
 
 	@Autowired
 	private MasterSyncService masterSyncService;
@@ -967,7 +962,7 @@ public class DocumentScanController extends BaseController {
 		registrationController.showCurrentPage(RegistrationConstants.DOCUMENT_SCAN,
 				getPageByAction(RegistrationConstants.DOCUMENT_SCAN, RegistrationConstants.NEXT));
 
-		guardianBiometricsController.populateBiometricPage(false);
+		biometricsController.populateBiometricPage(false);
 		/*
 		 * biometricExceptionController.disableNextBtn();
 		 * fingerPrintCaptureController.clearImage();
