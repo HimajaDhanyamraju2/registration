@@ -1,7 +1,7 @@
 package io.mosip.registration.controller.device;
 
 import static io.mosip.registration.constants.LoggerConstants.LOG_REG_FINGERPRINT_CAPTURE_CONTROLLER;
-import static io.mosip.registration.constants.LoggerConstants.LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER;
+import static io.mosip.registration.constants.LoggerConstants.LOG_REG_BIOMETRIC_CONTROLLER;
 import static io.mosip.registration.constants.RegistrationConstants.APPLICATION_ID;
 import static io.mosip.registration.constants.RegistrationConstants.APPLICATION_NAME;
 
@@ -87,12 +87,12 @@ import javafx.util.StringConverter;
  * @since 1.0
  */
 @Controller
-public class GuardianBiometricsController extends BaseController /* implements Initializable */ {
+public class BiometricsController extends BaseController /* implements Initializable */ {
 
 	/**
 	 * Instance of {@link Logger}
 	 */
-	private static final Logger LOGGER = AppConfig.getLogger(GuardianBiometricsController.class);
+	private static final Logger LOGGER = AppConfig.getLogger(BiometricsController.class);
 
 	@FXML
 	private GridPane biometricBox;
@@ -292,7 +292,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	 */
 	@FXML
 	public void initialize() {
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Loading of Guardian Biometric screen started");
 		comboBoxMap = new HashMap<>();
 		checkBoxMap = new HashMap<>();
@@ -328,7 +328,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	}
 
 	public void populateBiometricPage(boolean isUserOnboard) {
-		LOGGER.debug(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.debug(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"populateBiometricPage invoked, isUserOnboard : " + isUserOnboard);
 		isUserOnboardFlag = isUserOnboard;
 		Map<Entry<String, String>, Map<String, List<List<String>>>> mapToProcess = isUserOnboardFlag
@@ -344,9 +344,9 @@ public class GuardianBiometricsController extends BaseController /* implements I
 						getValue(RegistrationConstants.FACE, RegistrationConstants.faceUiAttributes)));
 
 		if (mapToProcess.isEmpty()) {
-			LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					"populateBiometricPage mapToProcess is EMTPY");
-			updatePageFlow(RegistrationConstants.GUARDIAN_BIOMETRIC, false);
+			updatePageFlow(RegistrationConstants.BIOMETRIC, false);
 			return;
 		}
 
@@ -582,7 +582,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 
 			comboBox.setValue((SimpleEntry<String, String>) comboBox.getItems().get(0));
 		} catch (NullPointerException | ClassCastException exception) {
-			LOGGER.error(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.error(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					ExceptionUtils.getStackTrace(exception));
 
 		}
@@ -613,7 +613,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	 */
 	private void displayBiometric(String modality) {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Displaying biometrics to capture");
 
 		retryBox.setVisible(true);
@@ -692,7 +692,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 		// retryBox.setVisible(true);
 		// }
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Parent/Guardian Biometrics captured");
 	}
 
@@ -734,7 +734,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	@FXML
 	private void scan(ActionEvent event) {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Displaying Scan popup for capturing biometrics");
 
 		scanPopUpViewController.init(this, "Biometrics");
@@ -744,7 +744,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 					scanPopUpViewController.getScanImage(), biometricImage);
 		}
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Scan popup closed and captured biometrics");
 
 	}
@@ -793,7 +793,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	public void scan(Stage popupStage) {
 		try {
 
-			LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					"Scan process started for capturing biometrics");
 
 			currentSubType = getListOfBiometricSubTypes().get(currentPosition);
@@ -802,7 +802,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 			refreshContinueButton();
 
 		} catch (RuntimeException | RegBaseCheckedException runtimeException) {
-			LOGGER.error(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.error(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					String.format(
 							"Exception while getting the scanned biometrics for user registration: %s caused by %s",
 							runtimeException.getMessage(),
@@ -811,7 +811,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 			generateAlert(RegistrationConstants.ERROR, RegistrationUIConstants.BIOMETRIC_SCANNING_ERROR);
 		}
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Scan process ended for capturing biometrics");
 	}
 
@@ -831,18 +831,18 @@ public class GuardianBiometricsController extends BaseController /* implements I
 				Integer.valueOf(getCaptureTimeOut()), count,
 				getThresholdScoreInInt(getThresholdKeyByBioType(modality)));
 
-		LOGGER.debug(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.debug(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"exceptionBioAttributes passed to mock/real MDM >>> " + exceptionBioAttributes);
 		try {
 			// Get Response from the MDS
 			List<BiometricsDto> mdsCapturedBiometricsList = bioService.captureModality(mdmRequestDto);
 
-			LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					"biometrics captured from mock/real MDM");
 
 			boolean isValidBiometric = mdsCapturedBiometricsList != null && !mdsCapturedBiometricsList.isEmpty();
 
-			LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					"biometrics captured from mock/real MDM was valid : " + isValidBiometric);
 
 			if (isValidBiometric) {
@@ -850,14 +850,14 @@ public class GuardianBiometricsController extends BaseController /* implements I
 				boolean isMatchedWithLocalBiometrics = false;
 				if (bioService.isMdmEnabled() && !isUserOnboardFlag) {
 
-					LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+					LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 							"Doing local de-dup validation");
 
 					isMatchedWithLocalBiometrics = identifyInLocalGallery(mdsCapturedBiometricsList,
 							Biometric.getSingleTypeByModality(isFace(modality) ? "FACE_FULL FACE" : modality).value());
 				}
 
-				LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+				LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 						"Doing local de-dup validation : " + isMatchedWithLocalBiometrics);
 
 				if (!isMatchedWithLocalBiometrics) {
@@ -867,12 +867,12 @@ public class GuardianBiometricsController extends BaseController /* implements I
 					double qualityScore = 0;
 					// save to registration DTO
 					for (BiometricsDto biometricDTO : mdsCapturedBiometricsList) {
-						LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+						LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 								"BiometricDTO captured from mock/real MDM >>> " + biometricDTO.getBioAttribute());
 
 						if (!exceptionBioAttributes.isEmpty()
 								&& exceptionBioAttributes.contains(biometricDTO.getBioAttribute())) {
-							LOGGER.debug(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+							LOGGER.debug(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 									"As bio atrribute marked as exception not storing into registration DTO : "
 											+ biometricDTO.getBioAttribute());
 							continue;
@@ -885,11 +885,11 @@ public class GuardianBiometricsController extends BaseController /* implements I
 						}
 					}
 
-					LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+					LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 							"started Saving filtered biometrics into registration DTO");
 					registrationDTOBiometricsList = saveCapturedBiometricData(subType, registrationDTOBiometricsList);
 
-					LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+					LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 							"Completed Saving filtered biometrics into registration DTO");
 
 					if (!registrationDTOBiometricsList.isEmpty()) {
@@ -905,20 +905,20 @@ public class GuardianBiometricsController extends BaseController /* implements I
 									this.getClass().getResourceAsStream(getStubStreamImagePath(modality)));
 						}
 
-						LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+						LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 								"Adding streaming image into local map");
 
 						addBioStreamImage(subType, currentModality,
 								registrationDTOBiometricsList.get(0).getNumOfRetries(), streamImage);
 
-						LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+						LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 								"Adding bio scores into local map");
 
 						addBioScores(subType, currentModality,
 								String.valueOf(registrationDTOBiometricsList.get(0).getNumOfRetries()),
 								qualityScore / registrationDTOBiometricsList.size());
 
-						LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+						LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 								"using captured response fill the fields like quality score and progress bar,,etc,.. UI");
 						loadBiometricsUIElements(registrationDTOBiometricsList, subType, currentModality);
 					} else {
@@ -929,7 +929,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 
 				} else {
 
-					LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+					LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 							"Local De-Dup check failed");
 					// if any above checks failed show alert capture failure
 					generateAlert(RegistrationConstants.ALERT_INFORMATION,
@@ -942,7 +942,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 						RegistrationUIConstants.BIOMETRIC_CAPTURE_FAILURE);
 			}
 		} catch (Exception exception) {
-			LOGGER.error(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.error(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					String.format("Exception while capturing biometrics : ", exception.getMessage(),
 							ExceptionUtils.getStackTrace(exception)));
 
@@ -968,12 +968,12 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	}
 	
 	private List<BiometricsDto> saveCapturedBiometricData(String subType, List<BiometricsDto> biometrics) {
-		LOGGER.debug(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.debug(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"saveCapturedBiometricData invoked size >> " + biometrics.size());
 		if (isUserOnboardFlag) {
 			List<BiometricsDto> savedCaptures = new ArrayList<>();
 			for (BiometricsDto value : biometrics) {
-				LOGGER.debug(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+				LOGGER.debug(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 						"updating userOnboard biometric data >> " + value.getModalityName());
 				savedCaptures.add(userOnboardService.addOperatorBiometrics(subType, value.getBioAttribute(), value));
 
@@ -985,7 +985,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 
 			for (BiometricsDto biometricsDto : biometrics) {
 
-				LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+				LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 						"Adding registration biometric data >> " + biometricsDto.getBioAttribute());
 				biometricsMap.put(biometricsDto.getBioAttribute(), biometricsDto);
 			}
@@ -998,7 +998,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 
 	private void loadBiometricsUIElements(List<BiometricsDto> biometricDTOList, String subType, String modality) {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Updating progress Bar,Text and attempts Box in UI");
 
 		int retry = biometricDTOList.get(0).getNumOfRetries();
@@ -1055,7 +1055,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	@FXML
 	private void previous(ActionEvent event) {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Navigates to previous section");
 
 		if (currentPosition != 0) {
@@ -1075,7 +1075,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	@FXML
 	private void next(ActionEvent event) {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Navigates to next section");
 
 		if (currentPosition != sizeOfCombobox - 1) {
@@ -1085,11 +1085,11 @@ public class GuardianBiometricsController extends BaseController /* implements I
 		}
 
 		if (isUserOnboardFlag) {
-			userOnboardParentController.showCurrentPage(RegistrationConstants.GUARDIAN_BIOMETRIC,
-					getOnboardPageDetails(RegistrationConstants.GUARDIAN_BIOMETRIC, RegistrationConstants.NEXT));
+			userOnboardParentController.showCurrentPage(RegistrationConstants.BIOMETRIC,
+					getOnboardPageDetails(RegistrationConstants.BIOMETRIC, RegistrationConstants.NEXT));
 		} else {
-			registrationController.showCurrentPage(RegistrationConstants.GUARDIAN_BIOMETRIC,
-					getPageByAction(RegistrationConstants.GUARDIAN_BIOMETRIC, RegistrationConstants.NEXT));
+			registrationController.showCurrentPage(RegistrationConstants.BIOMETRIC,
+					getPageByAction(RegistrationConstants.BIOMETRIC, RegistrationConstants.NEXT));
 		}
 
 		initializeState();
@@ -1110,7 +1110,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	 */
 	private void updateBiometric(String bioType, String bioImage, String biometricThreshold, String retryCount) {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Updating biometrics and clearing previous data");
 		this.bioType = constructBioType(bioType);
 		clearCaptureData();
@@ -1138,7 +1138,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 			setScanButtonVisibility(false, scanBtn);
 		}
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Updated biometrics and cleared previous data");
 	}
 
@@ -1168,7 +1168,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	 */
 	private void setCapturedValues(double qltyScore, int retry, double thresholdValue) {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Updating captured values of biometrics");
 
 		biometricPane.getStyleClass().clear();
@@ -1201,7 +1201,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 			scanBtn.setDisable(false);
 		}
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Updated captured values of biometrics");
 	}
 
@@ -1235,13 +1235,13 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	 *            threshold value
 	 */
 	private void createQualityBox(String retryCount, String biometricThreshold) {
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Updating Quality and threshold values of biometrics");
 
 		final EventHandler<MouseEvent> mouseEventHandler = new EventHandler<MouseEvent>() {
 			public void handle(final MouseEvent mouseEvent) {
 
-				LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+				LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 						"Mouse Event by attempt Started");
 
 				String eventString = mouseEvent.toString();
@@ -1269,7 +1269,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 								qualityText, bioProgress, qualityScore);
 					}
 
-					LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+					LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 							"Mouse Event by attempt Ended. modality : " + currentModality);
 
 				} catch (RuntimeException runtimeException) {
@@ -1305,7 +1305,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 		thresholdPane2.setPercentWidth(100.00 - (Double.parseDouble(threshold)));
 		// }
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Updated Quality and threshold values of biometrics");
 
 	}
@@ -1356,7 +1356,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 	 */
 	public void clearCapturedBioData() {
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Clearing the captured biometric data");
 
 		// clearAllBiometrics();
@@ -1376,7 +1376,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 		retryBox.setVisible(false);
 		bioValue = RegistrationUIConstants.SELECT;
 
-		LOGGER.info(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Cleared the captured biometric data");
 
 	}
@@ -1643,7 +1643,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 		try {
 			qualityScore = BIO_SCORES.get(String.format("%s_%s_%s", subType, modality, attempt));
 		} catch (NullPointerException nullPointerException) {
-			LOGGER.error(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.error(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					ExceptionUtils.getStackTrace(nullPointerException));
 
 		}
@@ -1707,7 +1707,7 @@ public class GuardianBiometricsController extends BaseController /* implements I
 					.identify(sample, gallery, biometricType, null);
 			return result.entrySet().stream().anyMatch(e -> e.getValue() == true);
 		} catch (BiometricException e) {
-			LOGGER.error(LOG_REG_GUARDIAN_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
+			LOGGER.error(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 					"Failed to dedupe >> " + ExceptionUtils.getStackTrace(e));
 		}
 		return false;

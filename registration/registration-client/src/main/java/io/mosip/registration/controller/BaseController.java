@@ -42,7 +42,7 @@ import io.mosip.registration.constants.RegistrationConstants;
 import io.mosip.registration.constants.RegistrationUIConstants;
 import io.mosip.registration.context.ApplicationContext;
 import io.mosip.registration.context.SessionContext;
-import io.mosip.registration.controller.device.GuardianBiometricsController;
+import io.mosip.registration.controller.device.BiometricsController;
 import io.mosip.registration.controller.device.ScanPopUpViewController;
 import io.mosip.registration.controller.eodapproval.RegistrationApprovalController;
 import io.mosip.registration.controller.reg.AlertController;
@@ -145,7 +145,7 @@ public class BaseController {
 	public RegistrationPreviewController registrationPreviewController;
 
 	@Autowired
-	private GuardianBiometricsController guardianBiometricsController;
+	private BiometricsController biometricsController;
 
 	@Autowired
 	private TemplateService templateService;
@@ -716,7 +716,7 @@ public class BaseController {
 
 		clearAllValues();
 
-		guardianBiometricsController.clearBioCaptureInfo();
+		biometricsController.clearBioCaptureInfo();
 
 		SessionContext.userMap().remove(RegistrationConstants.TOGGLE_BIO_METRIC_EXCEPTION);
 		SessionContext.userMap().remove(RegistrationConstants.IS_LOW_QUALITY_BIOMETRICS);
@@ -904,7 +904,7 @@ public class BaseController {
 			// fingerPrintCaptureController.clearFingerPrintDTO();
 			// irisCaptureController.clearIrisData();
 			// faceCaptureController.clearPhoto(RegistrationConstants.APPLICANT_IMAGE);
-			guardianBiometricsController.clearCapturedBioData();
+			biometricsController.clearCapturedBioData();
 		} else {
 			if (SessionContext.map().get(RegistrationConstants.REGISTRATION_DATA) != null) {
 				((RegistrationDTO) SessionContext.map().get(RegistrationConstants.REGISTRATION_DATA)).getBiometricDTO()
@@ -914,7 +914,7 @@ public class BaseController {
 
 				// faceCaptureController.clearPhoto(RegistrationConstants.APPLICANT_IMAGE);
 				// faceCaptureController.clearPhoto(RegistrationConstants.EXCEPTION_IMAGE);
-				guardianBiometricsController.clearCapturedBioData();
+				biometricsController.clearCapturedBioData();
 			}
 		}
 	}
