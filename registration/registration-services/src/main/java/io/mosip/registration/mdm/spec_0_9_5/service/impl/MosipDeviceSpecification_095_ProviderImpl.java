@@ -38,6 +38,7 @@ import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.kernel.packetmanager.dto.BiometricsDto;
 import io.mosip.registration.config.AppConfig;
 import io.mosip.registration.constants.LoggerConstants;
+import io.mosip.registration.constants.RegistrationConstants;
 import io.mosip.registration.exception.RegBaseCheckedException;
 import io.mosip.registration.exception.RegistrationExceptionConstants;
 import io.mosip.registration.mdm.constants.MosipBioDeviceConstants;
@@ -172,7 +173,11 @@ public class MosipDeviceSpecification_095_ProviderImpl implements MosipDeviceSpe
 			if (mdmRequestDto.getExceptions() != null) {
 				mdmRequestDto.setExceptions(getExceptions(mdmRequestDto.getExceptions()));
 			}
+			
+			int count = getCount(getDefaultCount(mdmRequestDto.getModality()), mdmRequestDto.getExceptions() != null ? mdmRequestDto.getExceptions().length : 0);
 
+			mdmRequestDto.setCount(count);
+			
 			RCaptureRequestDTO rCaptureRequestDTO = getRCaptureRequest(bioDevice, mdmRequestDto);
 
 			LOGGER.info(loggerClassName, APPLICATION_NAME, APPLICATION_ID,
@@ -216,6 +221,13 @@ public class MosipDeviceSpecification_095_ProviderImpl implements MosipDeviceSpe
 
 				LOGGER.info(loggerClassName, APPLICATION_NAME, APPLICATION_ID,
 						"Getting data payload of biometric" + System.currentTimeMillis());
+				
+				if (rCaptureResponseBiometricsDTO.getData() == null || rCaptureResponseBiometricsDTO.getData().isEmpty()) {
+					throw new RegBaseCheckedException(
+							RegistrationExceptionConstants.MDS_RCAPTURE_ERROR.getErrorCode(),
+							RegistrationExceptionConstants.MDS_RCAPTURE_ERROR.getErrorMessage()
+									+ " : Data is empty in RCapture");
+				}
 
 				if (rCaptureResponseBiometricsDTO.getData() != null
 						&& !rCaptureResponseBiometricsDTO.getData().isEmpty()) {
@@ -264,6 +276,34 @@ public class MosipDeviceSpecification_095_ProviderImpl implements MosipDeviceSpe
 		}
 	}
 
+	private int getDefaultCount(String modality) {
+		int defaultCount = 1;
+		if (modality != null) {
+			switch (modality) {
+			case RegistrationConstants.FACE_FULLFACE:
+				defaultCount = 1;
+				break;
+			case RegistrationConstants.IRIS_DOUBLE:
+				defaultCount = 2;
+				break;
+			case RegistrationConstants.FINGERPRINT_SLAB_RIGHT:
+				defaultCount = 4;
+				break;
+			case RegistrationConstants.FINGERPRINT_SLAB_LEFT:
+				defaultCount = 4;
+				break;
+			case RegistrationConstants.FINGERPRINT_SLAB_THUMBS:
+				defaultCount = 2;
+				break;
+			}
+		}
+		return defaultCount;
+	}
+
+	private int getCount(int defaultCount, int exceptionsCount) {
+		return defaultCount - exceptionsCount;
+	}
+
 	private String[] getExceptions(String[] exceptions) {
 
 		if (exceptions != null) {
@@ -285,7 +325,7 @@ public class MosipDeviceSpecification_095_ProviderImpl implements MosipDeviceSpe
 
 		if (bioDevice != null) {
 			List<RCaptureRequestBioDTO> captureRequestBioDTOs = new LinkedList<>();
-			captureRequestBioDTOs.add(new RCaptureRequestBioDTO(bioDevice.getDeviceType(), "1", null,
+			captureRequestBioDTOs.add(new RCaptureRequestBioDTO(bioDevice.getDeviceType(), Integer.toString(mdmRequestDto.getCount()), null,
 					mdmRequestDto.getExceptions(), String.valueOf(mdmRequestDto.getRequestedScore()),
 					bioDevice.getDeviceId(), getDeviceSubId(mdmRequestDto.getModality()), null));
 
