@@ -2,14 +2,11 @@ package io.mosip.registration.util.common;
 
 import static io.mosip.registration.constants.RegistrationConstants.APPLICATION_NAME;
 
-import java.text.Normalizer;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.registration.config.AppConfig;
 import io.mosip.registration.constants.RegistrationConstants;
-import io.mosip.registration.controller.reg.DemographicDetailController;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -40,27 +37,19 @@ public class ComboBoxAutoComplete<T> {
 	private final ObservableList<T> originalItems;
 
 	public ComboBoxAutoComplete(ComboBox<T> cmb) {
-
 		LOGGER.debug(loggerClassName, APPLICATION_NAME, RegistrationConstants.APPLICATION_ID,
 				"New ComboBoxAutoComplete called");
 
 		this.cmb = cmb;
 		originalItems = FXCollections.observableArrayList(cmb.getItems());
 		cmb.setTooltip(new Tooltip());
-		cmb.setOnMouseClicked(event -> {
-			cmb.getTooltip().show(cmb, event.getScreenX(), event.getScreenY() - 18);
-			cmb.getTooltip().hide();
-		});
 		cmb.setOnKeyPressed(this::handleOnKeyPressed);
 		cmb.setOnHidden(this::handleOnHiding);
 
 		filter.addListener((observable, oldValue, newValue) -> {
-
 			if (filter.get().isEmpty()) {
-
 				LOGGER.debug(loggerClassName, APPLICATION_NAME, RegistrationConstants.APPLICATION_ID,
 						"New ComboBoxAutoComplete called");
-
 				T selectedItem = this.cmb.getSelectionModel().getSelectedItem();
 				this.cmb.getItems().clear();
 				this.cmb.getItems().addAll(originalItems);
@@ -73,7 +62,6 @@ public class ComboBoxAutoComplete<T> {
 	}
 
 	public void handleOnKeyPressed(KeyEvent key) {
-
 		LOGGER.debug(loggerClassName, APPLICATION_NAME, RegistrationConstants.APPLICATION_ID,
 				"Combo box search started");
 		ObservableList<T> filteredList = FXCollections.observableArrayList();
@@ -106,29 +94,21 @@ public class ComboBoxAutoComplete<T> {
 			itens.filter(el -> el.toString().toLowerCase().contains(txtUsr)).forEach(filteredList::add);
 			cmb.getTooltip().setText(txtUsr);
 			Window stage = cmb.getScene().getWindow();
-			double posX = stage.getX() + cmb.getBoundsInParent().getMinX();
-			double posY = stage.getY() + cmb.getBoundsInParent().getMinY();
-
-//			event.getScreenX(), event.getScreenY() + 15)
-//			cmb.getTooltip().show(stage, cmb.getParent().getLayoutX(), cmb.getParent().getParent().getLayoutY());
-			cmb.getTooltip().show(stage);
+			double posX = stage.getX() + cmb.localToScene(cmb.getBoundsInLocal()).getMinX();
+			double posY = stage.getY() + cmb.localToScene(cmb.getBoundsInLocal()).getMinY();
+			cmb.getTooltip().show(stage, posX, posY);
 			cmb.show();
-
 			cmb.getItems().setAll(filteredList);
 
 		}
-
 		LOGGER.debug(loggerClassName, APPLICATION_NAME, RegistrationConstants.APPLICATION_ID,
 				"Combo box search completed");
-
 	}
 
 	public void handleOnHiding(Event e) {
-
 		LOGGER.debug(loggerClassName, APPLICATION_NAME, RegistrationConstants.APPLICATION_ID, "Hide tool tip started");
 		filter.set("");
 		cmb.getTooltip().hide();
-
 		LOGGER.debug(loggerClassName, APPLICATION_NAME, RegistrationConstants.APPLICATION_ID,
 				"Hide tool tip completed");
 	}
