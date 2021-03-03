@@ -1655,7 +1655,7 @@ public class RegistrationConstants {
 
 	public static final List<String> TWO_IRIS = Arrays.asList(LEFT_EYE, RIGHT_EYE);
 
-	public static final String SESSION_KEY_URL = "session_key";
+	//public static final String SESSION_KEY_URL = "session_key";
 	public static final String AUTH_HASH = "hash";
 	public static final String SESSION_KEY = "sessionKey";
 	public static final String SIGNATURE = "signature";
@@ -1870,11 +1870,13 @@ public class RegistrationConstants {
 	public static final String GENERIC_LAYOUT = "/fxml/GenericRegistrationLayout.fxml";
 	public static final String BIOMETRIC_FXML = "/fxml/GenericBiometricFXML.fxml";
 
-//	Code CleanUp 
+	//	Code CleanUp 
 	public static final String LABELS = "labels";
 	public static final String MESSAGES = "messages";
 	public static final String Resident_Information = "Resident Information";
 	public static final String previewHeader = "previewHeader";
 	public static final String authentication = "authentication";
 	public static final String SLASH = "/";
+	
+	public static final String DEVICE_STATUS_READY = "Ready";
 }

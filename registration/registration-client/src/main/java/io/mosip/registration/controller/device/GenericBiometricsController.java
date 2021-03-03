@@ -51,6 +51,7 @@ import io.mosip.registration.constants.AuditReferenceIdTypes;
 import io.mosip.registration.constants.Components;
 import io.mosip.registration.constants.RegistrationConstants;
 import io.mosip.registration.constants.RegistrationUIConstants;
+import io.mosip.registration.context.ApplicationContext;
 import io.mosip.registration.context.SessionContext;
 import io.mosip.registration.controller.BaseController;
 import io.mosip.registration.controller.FXUtils;
@@ -64,6 +65,7 @@ import io.mosip.registration.dto.packetmanager.BiometricsDto;
 import io.mosip.registration.dto.packetmanager.DocumentDto;
 import io.mosip.registration.entity.UserBiometric;
 import io.mosip.registration.exception.RegBaseCheckedException;
+import io.mosip.registration.exception.RegistrationExceptionConstants;
 import io.mosip.registration.mdm.dto.Biometric;
 import io.mosip.registration.mdm.dto.MDMRequestDto;
 import io.mosip.registration.mdm.dto.MdmBioDevice;
@@ -226,7 +228,7 @@ public class GenericBiometricsController extends BaseController /* implements In
 
 	@Value("${mosip.doc.stage.height:620}")
 	private int height;
-	
+
 	private static Map<String, Image> STREAM_IMAGES = new HashMap<String, Image>();
 
 	private static Map<String, Double> BIO_SCORES = new HashMap<String, Double>();
@@ -368,7 +370,7 @@ public class GenericBiometricsController extends BaseController /* implements In
 		leftHandImageBoxMap = new HashMap<>();
 		exceptionMap = new HashMap<>();
 
-		applicationLabelBundle = applicationContext.getInstance().getApplicationLanguageBundle();
+		applicationLabelBundle = applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS);
 		Image backInWhite = new Image(getClass().getResourceAsStream(RegistrationConstants.BACK_FOCUSED));
 		Image backImage = new Image(getClass().getResourceAsStream(RegistrationConstants.BACK));
 //		backButton.hoverProperty().addListener((ov, oldValue, newValue) -> {
@@ -379,7 +381,7 @@ public class GenericBiometricsController extends BaseController /* implements In
 //			}
 //		});
 
-		applicationLabelBundle = applicationContext.getApplicationLanguageBundle();
+		applicationLabelBundle = applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS);
 
 //		if (getRegistrationDTOFromSession() != null && getRegistrationDTOFromSession().getSelectionListDTO() != null) {
 //
@@ -723,7 +725,7 @@ public class GenericBiometricsController extends BaseController /* implements In
 
 		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID, "Displaying biometrics to capture");
 
-		applicationLabelBundle = applicationContext.getApplicationLanguageBundle();
+		applicationLabelBundle = applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS);
 		retryBox.setVisible(true);
 		biometricBox.setVisible(true);
 		biometricType.setText(applicationLabelBundle.getString(modality));
@@ -1004,12 +1006,19 @@ public class GenericBiometricsController extends BaseController /* implements In
 					protected MdmBioDevice call() throws RegBaseCheckedException {
 
 						LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
-								"Capture request started" + System.currentTimeMillis());
+								"device search request started" + System.currentTimeMillis());
 
-						return deviceSpecificationFactory
-								.getDeviceInfoByModality(isFace(currentModality) || isExceptionPhoto(currentModality)
-										? RegistrationConstants.FACE_FULLFACE
-										: currentModality);
+						if (deviceSpecificationFactory.isDeviceAvailable(currentModality)) {
+
+							return deviceSpecificationFactory.getDeviceInfoByModality(
+									isFace(currentModality) || isExceptionPhoto(currentModality)
+											? RegistrationConstants.FACE_FULLFACE
+											: currentModality);
+						} else {
+							throw new RegBaseCheckedException(
+									RegistrationExceptionConstants.MDS_BIODEVICE_NOT_FOUND.getErrorCode(),
+									RegistrationExceptionConstants.MDS_BIODEVICE_NOT_FOUND.getErrorMessage());
+						}
 
 					}
 				};
@@ -2550,7 +2559,8 @@ public class GenericBiometricsController extends BaseController /* implements In
 						else {
 							getRegistrationDTOFromSession().addBiometricException(currentSubType, node.getId(),
 									node.getId(), "Temporary", "Temporary");
-							genericController.refreshFields();;
+							genericController.refreshFields();
+							;
 						}
 					}
 				}
