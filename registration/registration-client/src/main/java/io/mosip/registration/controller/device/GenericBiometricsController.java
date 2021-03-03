@@ -51,7 +51,6 @@ import io.mosip.registration.constants.AuditReferenceIdTypes;
 import io.mosip.registration.constants.Components;
 import io.mosip.registration.constants.RegistrationConstants;
 import io.mosip.registration.constants.RegistrationUIConstants;
-import io.mosip.registration.context.ApplicationContext;
 import io.mosip.registration.context.SessionContext;
 import io.mosip.registration.controller.BaseController;
 import io.mosip.registration.controller.FXUtils;
@@ -366,157 +365,9 @@ public class GenericBiometricsController extends BaseController /* implements In
 		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
 				"Loading of Guardian Biometric screen started");
 
-<<<<<<< HEAD
-		applicationLabelBundle = applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS);
-		Image backInWhite = new Image(getClass().getResourceAsStream(RegistrationConstants.BACK_FOCUSED));
-		Image backImage = new Image(getClass().getResourceAsStream(RegistrationConstants.BACK));
-//		backButton.hoverProperty().addListener((ov, oldValue, newValue) -> {
-//			if (newValue) {
-//				backImageView.setImage(backInWhite);
-//			} else {
-//				backImageView.setImage(backImage);
-//			}
-//		});
-=======
 		applicationLabelBundle = applicationContext.getBundle(applicationContext.getApplicationLanguage(),
 				RegistrationConstants.LABELS);
->>>>>>> branch 'MOSIP-12152_Multi-Lang' of https://github.com/yaswanths2/registration
 
-<<<<<<< HEAD
-		applicationLabelBundle = applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS);
-
-//		if (getRegistrationDTOFromSession() != null && getRegistrationDTOFromSession().getSelectionListDTO() != null) {
-//
-//			registrationNavlabel.setText(ApplicationContext.applicationLanguageBundle()
-//					.getString(RegistrationConstants.UIN_UPDATE_UINUPDATENAVLBL));
-//
-//		} else if (getRegistrationDTOFromSession() != null
-//				&& getRegistrationDTOFromSession().getRegistrationMetaDataDTO().getRegistrationCategory() != null
-//				&& getRegistrationDTOFromSession().getRegistrationMetaDataDTO().getRegistrationCategory()
-//						.equals(RegistrationConstants.PACKET_TYPE_LOST)) {
-//
-//			registrationNavlabel.setText(
-//					ApplicationContext.applicationLanguageBundle().getString(RegistrationConstants.LOSTUINLBL));
-//
-//		}
-	}
-
-	public void populateBiometricPage(boolean isUserOnboard, boolean isGoingBack) {
-		LOGGER.debug(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
-				"populateBiometricPage invoked, isUserOnboard : " + isUserOnboard);
-
-		isUserOnboardFlag = isUserOnboard;
-		Map<Entry<String, String>, Map<String, List<List<String>>>> mapToProcess = isUserOnboardFlag
-				? getOnboardUserMap()
-				: getconfigureAndNonConfiguredBioAttributes(Arrays.asList(
-						getValue(RegistrationConstants.FINGERPRINT_SLAB_LEFT,
-								RegistrationConstants.leftHandUiAttributes),
-						getValue(RegistrationConstants.FINGERPRINT_SLAB_RIGHT,
-								RegistrationConstants.rightHandUiAttributes),
-						getValue(RegistrationConstants.FINGERPRINT_SLAB_THUMBS,
-								RegistrationConstants.twoThumbsUiAttributes),
-						getValue(RegistrationConstants.IRIS_DOUBLE, RegistrationConstants.eyesUiAttributes),
-						getValue(RegistrationConstants.FACE, RegistrationConstants.faceUiAttributes)));
-
-		if (mapToProcess.isEmpty()) {
-			LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID,
-					"populateBiometricPage mapToProcess is EMTPY");
-			updatePageFlow(RegistrationConstants.GUARDIAN_BIOMETRIC, false);
-			return;
-		}
-
-		removeInapplicableCapturedData(mapToProcess);
-
-		if (isUserOnboard) {
-			registrationNavlabel.setVisible(false);
-			backButton.setVisible(false);
-			gheaderfooter.setVisible(false);
-			continueBtn.setText("SAVE");
-		} else {
-			registrationNavlabel.setVisible(true);
-			backButton.setVisible(true);
-			gheaderfooter.setVisible(true);
-			continueBtn.setText("CONTINUE");
-		}
-
-		checkBoxPane.getChildren().clear();
-		leftPanelImageGridPane.getChildren().clear();
-
-		// comboBoxMap.clear();
-		// checkBoxMap.clear();
-		currentMap.clear();
-		leftHandImageBoxMap.clear();
-		exceptionMap.clear();
-
-		leftPanelImageGridPane.setAlignment(Pos.TOP_LEFT);
-		leftPanelImageGridPane.setPadding(new Insets(70, 100, 100, 70)); // margins around the whole grid
-		// (top/right/bottom/left)
-		for (Entry<Entry<String, String>, Map<String, List<List<String>>>> subType : mapToProcess.entrySet()) {
-
-			int rowIndex = 0;
-			// leftPanelImageGridPane.getChildren().add(new Label("Biometrics"));
-			GridPane gridPane = getGridPane(subType.getKey());
-
-			// ComboBox<Entry<String, String>> comboBox = buildComboBox(subType.getKey());
-			HashMap<String, VBox> subMap = new HashMap<>();
-			currentMap.put(subType.getKey().getKey(), new ArrayList<String>());
-			for (Entry<String, List<List<String>>> biometric : subType.getValue().entrySet()) {
-				List<List<String>> listOfCheckBoxes = biometric.getValue();
-				currentMap.get(subType.getKey().getKey()).addAll(listOfCheckBoxes.get(0));
-				if (!listOfCheckBoxes.get(0).isEmpty()) {
-
-					// comboBox.getItems().add(new SimpleEntry<String, String>(biometric.getKey(),
-					// applicationLabelBundle.getString(biometric.getKey())));
-
-					gridPane.add(getImageVBox(biometric.getKey(), subType.getKey().getKey(), listOfCheckBoxes.get(0)),
-							1, rowIndex);
-
-					rowIndex++;
-
-					// gridPane.getChildren().add(getImageVBox(biometric.getKey()));
-					if (!listOfCheckBoxes.get(0).get(0).equals("face")) {
-
-						VBox vboxForCheckBox = new VBox();
-						vboxForCheckBox.setSpacing(5);
-						Label checkBoxTitle = new Label();
-						checkBoxTitle.setText(applicationLabelBundle.getString("exceptionCheckBoxPaneLabel"));
-						vboxForCheckBox.getChildren().addAll(checkBoxTitle);
-						checkBoxTitle.getStyleClass().add("demoGraphicFieldLabel");
-
-						vboxForCheckBox.getChildren().add(getExceptionImagePane(biometric.getKey(),
-								listOfCheckBoxes.get(0), listOfCheckBoxes.get(1), subType.getKey().getKey()));
-
-						vboxForCheckBox.setVisible(false);
-						vboxForCheckBox.setManaged(false);
-
-						checkBoxPane.add(vboxForCheckBox, 0, 0);
-
-						// checkBoxPane.setVisible(true);
-
-						// checkBoxMap.put(subType.getKey().getKey(), subMap);
-						subMap.put(biometric.getKey(), vboxForCheckBox);
-
-						exceptionMap.put(subType.getKey().getKey(), subMap);
-
-					}
-				}
-			}
-
-//			if (isApplicant(subType.getKey().getKey()) && rowIndex > 1) {
-//
-//				gridPane.add(getExceptionImageVBox(RegistrationConstants.EXCEPTION_PHOTO), 1, rowIndex);
-//
-//				if (rowIndex >= 5) {
-//
-//					gridPane.setPadding(new Insets(100, 10, 10, 10));
-//				}
-//
-//			}
-		}
-
-		initializeState(isGoingBack);
-=======
->>>>>>> branch 'MOSIP-12152_Multi-Lang' of https://github.com/yaswanths2/registration
 	}
 
 	private void displayExceptionBiometric(String modality) {
@@ -575,13 +426,9 @@ public class GenericBiometricsController extends BaseController /* implements In
 
 		LOGGER.info(LOG_REG_BIOMETRIC_CONTROLLER, APPLICATION_NAME, APPLICATION_ID, "Displaying biometrics to capture");
 
-<<<<<<< HEAD
-		applicationLabelBundle = applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS);
-=======
 		applicationLabelBundle = applicationLabelBundle = applicationContext
 				.getBundle(applicationContext.getApplicationLanguage(), RegistrationConstants.LABELS);
 		;
->>>>>>> branch 'MOSIP-12152_Multi-Lang' of https://github.com/yaswanths2/registration
 		retryBox.setVisible(true);
 		biometricBox.setVisible(true);
 		biometricType.setText(applicationLabelBundle.getString(modality));
