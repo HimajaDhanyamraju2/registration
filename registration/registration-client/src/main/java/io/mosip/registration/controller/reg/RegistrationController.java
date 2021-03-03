@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.ResourceBundle;
 
 import io.mosip.registration.service.packet.PacketHandlerService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -112,39 +113,7 @@ public class RegistrationController extends BaseController {
 	@Autowired
 	private PacketHandlerService packetHandlerService;
 
-
 	private List<String> selectedLangList = new LinkedList<>();
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see javafx.fxml.Initializable#initialize()
-	 */
-	@FXML
-	private void initialize() {
-		LOGGER.debug(RegistrationConstants.REGISTRATION_CONTROLLER, APPLICATION_NAME,
-				RegistrationConstants.APPLICATION_ID, "Entering the Registration Controller");
-		try {
-			if (isEditPage() && getRegistrationDTOFromSession() != null) {
-				prepareEditPageContent();
-			}
-//			uinUpdate();
-
-		} catch (RuntimeException runtimeException) {
-			LOGGER.error("REGISTRATION - CONTROLLER", APPLICATION_NAME, RegistrationConstants.APPLICATION_ID,
-					runtimeException.getMessage() + ExceptionUtils.getStackTrace(runtimeException));
-			generateAlert(RegistrationConstants.ERROR, RegistrationUIConstants.UNABLE_LOAD_REG_PAGE);
-		}
-	}
-
-	/**
-	 * This method is prepare the screen for uin update
-	 */
-	private void uinUpdate() {
-		if (getRegistrationDTOFromSession() != null && getRegistrationDTOFromSession().getUpdatableFields() != null) {
-			demographicDetailController.uinUpdate();
-		}
-	}
 
 	public void init(String UIN, HashMap<String, Object> selectionListDTO, Map<String, UiSchemaDTO> selectedFields,
 			List<String> selectedFieldGroups) {
@@ -165,26 +134,6 @@ public class RegistrationController extends BaseController {
 
 		createRegistrationDTOObject(RegistrationConstants.PACKET_TYPE_LOST);
 	}
-
-	/**
-	 * This method is to prepopulate all the values for edit operation
-	 */
-	private void prepareEditPageContent() {
-		try {
-			LOGGER.debug(RegistrationConstants.REGISTRATION_CONTROLLER, APPLICATION_NAME,
-					RegistrationConstants.APPLICATION_ID, "Preparing the Edit page content");
-			// demographicDetailController.prepareEditPageContent();
-			documentScanController.prepareEditPageContent();
-			SessionContext.map().put(RegistrationConstants.REGISTRATION_ISEDIT, false);
-		} catch (RuntimeException runtimeException) {
-			LOGGER.error(RegistrationConstants.REGISTRATION_CONTROLLER, APPLICATION_NAME,
-					RegistrationConstants.APPLICATION_ID,
-					runtimeException.getMessage() + ExceptionUtils.getStackTrace(runtimeException));
-		}
-
-	}
-
-
 
 	/**
 	 * This method is to go to the operator authentication page
@@ -214,15 +163,16 @@ public class RegistrationController extends BaseController {
 	public void createRegistrationDTOObject(String registrationCategory) {
 		try {
 			// Put the RegistrationDTO object to SessionContext Map
-			SessionContext.map().put(RegistrationConstants.REGISTRATION_DATA, packetHandlerService.startRegistration(null,
-					registrationCategory));
+			SessionContext.map().put(RegistrationConstants.REGISTRATION_DATA,
+					packetHandlerService.startRegistration(null, registrationCategory));
 		} catch (RegBaseCheckedException ex) {
 			LOGGER.error(RegistrationConstants.REGISTRATION_CONTROLLER, APPLICATION_NAME,
 					RegistrationConstants.APPLICATION_ID, ExceptionUtils.getStackTrace(ex));
+			ResourceBundle resourceBundle = applicationContext.getBundle(applicationContext.getApplicationLanguage(),
+					RegistrationConstants.MESSAGES);
 			generateAlert(RegistrationConstants.ERROR,
-					applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS).containsKey(ex.getErrorCode()) ?
-							applicationContext.getBundle(ApplicationContext.applicationLanguage(), RegistrationConstants.LABELS).getString(ex.getErrorCode()) :
-							ex.getErrorCode());
+					resourceBundle.containsKey(ex.getErrorCode()) ? resourceBundle.getString(ex.getErrorCode())
+							: ex.getErrorCode());
 		}
 	}
 
