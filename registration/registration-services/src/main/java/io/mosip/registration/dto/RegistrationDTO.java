@@ -83,6 +83,8 @@ public class RegistrationDTO {
 	private String acknowledgeReceiptName;
 
 	public Map<String, byte[]> streamImages = new HashMap<>();
+	
+	private List<String> selectedLanguagesByApplicant = new ArrayList<>();
 
 	public void addDemographicField(String fieldId, String value) {
 		this.demographics.put(fieldId, (value != null && !value.isEmpty()) ? value : null);
@@ -331,5 +333,15 @@ public class RegistrationDTO {
 		}
 
 		return qualityScore;
+	}
+	
+
+	
+	public List<String> getSelectedLanguagesByApplicant() {
+		return selectedLanguagesByApplicant;
+	}
+	
+	public void setSelectedLanguagesByApplicant(List<String> selectedLanguagesByApplicant) {
+		this.selectedLanguagesByApplicant = selectedLanguagesByApplicant;
 	}
 }
