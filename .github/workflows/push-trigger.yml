@@ -20,6 +20,7 @@ on:
       - master
       - 1.*
       - develop
+      - stp-1.2.0.2
 
 jobs:
   build-maven-registration:
