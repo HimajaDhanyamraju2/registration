@@ -229,6 +229,9 @@ public class RestApiClient {
 		headers.add(TracingConstant.TRACE_HEADER, (String) ContextualData.getOrDefault(TracingConstant.TRACE_ID_KEY));
 		if (mediaType != null) {
 			headers.add("Content-Type", mediaType.toString());
+		} else {
+			// Default to JSON if mediaType not provided
+			headers.add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
 		}
 		if (requestType != null) {
 			try {
