@@ -287,6 +287,13 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 								LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
 								"Generated National ID: " + nationalId);
 						demographicIdentity.put(nationalIdFieldName, nationalId);
+						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+								"Successfully added national ID to demographic identity");
+						JSONArray selectedHandles = new JSONArray();
+						selectedHandles.put("nationalId");
+						demographicIdentity.putIfAbsent("selectedHandles", selectedHandles);
+						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+								"Added selectedHandles to demographic identity");
 					} catch (Exception e) {
 						regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
 								LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
@@ -1274,9 +1281,6 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 		if (nationalId == null || nationalId.isEmpty()) {
 			throw new NationalIdGenerationException("Generated national ID is null or empty for registration: " + registrationId);
 		}
-
-		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-				"Successfully generated and added national ID: " + nationalId + " to demographic identity");
 
 		return nationalId;
 	}
