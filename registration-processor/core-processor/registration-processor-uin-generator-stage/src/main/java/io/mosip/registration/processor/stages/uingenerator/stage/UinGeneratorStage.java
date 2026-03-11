@@ -80,7 +80,9 @@ import io.mosip.registration.processor.rest.client.audit.builder.AuditLogRequest
 import io.mosip.registration.processor.stages.uingenerator.constants.UINConstants;
 import io.mosip.registration.processor.stages.uingenerator.dto.UinGenResponseDto;
 import io.mosip.registration.processor.stages.uingenerator.exception.VidCreationException;
+import io.mosip.registration.processor.stages.uingenerator.exception.NationalIdGenerationException;
 import io.mosip.registration.processor.stages.uingenerator.util.UinStatusMessage;
+import org.json.JSONArray;
 import io.mosip.registration.processor.status.code.RegistrationStatusCode;
 import io.mosip.registration.processor.status.code.RegistrationType;
 import io.mosip.registration.processor.status.dto.InternalRegistrationStatusDto;
@@ -155,6 +157,24 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.uin.generator.trim-whitespaces.simpleType-value:false}")
 	private boolean trimWhitespaces;
 
+	@Value("${mosip.regproc.national-id.field-name:nationalId}")
+	private String nationalIdFieldName;
+
+	@Value("${mosip.regproc.national-id.citizen-type-field:residenceStatus}")
+	private String citizenTypeFieldName;
+
+	@Value("${mosip.regproc.national-id.citizen-value:Cidadão}")
+	private String citizenValue;
+
+	@Value("${mosip.regproc.national-id.district-field:district}")
+	private String districtFieldName;
+
+	@Value("${mosip.regproc.national-id.enable:true}")
+	private boolean enableNationalIdGeneration;
+
+	@Value("${mosip.regproc.national-id.preferred-language:por}")
+	private String nationalIdPreferredLanguage;
+
 	/** The core audit request builder. */
 	@Autowired
 	private AuditLogRequestBuilder auditLogRequestBuilder;
@@ -202,6 +222,9 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	@Autowired
+	private io.mosip.registration.processor.stages.uingenerator.service.NationalIdGenerator nationalIdGenerator;
 
 	private TrimExceptionMessage trimExceptionMessage = new TrimExceptionMessage();
 
@@ -254,6 +277,22 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 				demographicIdentity.put(MappingJsonConstants.IDSCHEMA_VERSION, convertIdschemaToDouble ? Double.valueOf(schemaVersion) : schemaVersion);
 
 				loadDemographicIdentity(fieldMap, demographicIdentity);
+
+				// Generate and add National ID to demographic identity before sending to ID Repo
+				if (enableNationalIdGeneration && (StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null"))) {
+					try {
+						String nationalId = generateAndAddNationalId(registrationId, registrationStatusDto.getRegistrationType());
+						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
+								LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+								"Generated National ID: " + nationalId);
+						demographicIdentity.put(nationalIdFieldName, nationalId);
+					} catch (Exception e) {
+						regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
+								LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+								"Failed to generate National ID: " + e.getMessage());
+						throw e;
+					}
+				}
 
 				if (StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null") ) {
 
@@ -416,6 +455,20 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 							.getStatusCode(RegistrationExceptionTypeCode.IDREPO_DRAFT_REPROCESSABLE_EXCEPTION));
 			description.setMessage(PlatformErrorMessages.IDREPO_DRAFT_EXCEPTION.getMessage());
 			description.setCode(PlatformErrorMessages.IDREPO_DRAFT_EXCEPTION.getCode());
+			object.setInternalError(Boolean.TRUE);
+			object.setRid(registrationStatusDto.getRegistrationId());
+		} catch (NationalIdGenerationException e) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+					registrationId,
+					RegistrationStatusCode.FAILED.toString() + e.getMessage() + ExceptionUtils.getStackTrace(e));
+			registrationStatusDto.setStatusCode(RegistrationStatusCode.FAILED.toString());
+			registrationStatusDto.setStatusComment(
+					trimExceptionMessage.trimExceptionMessage("National ID generation failed: " + e.getMessage()));
+			registrationStatusDto.setSubStatusCode(StatusUtil.UNKNOWN_EXCEPTION_OCCURED.getCode());
+			registrationStatusDto.setLatestTransactionStatusCode(
+					registrationStatusMapperUtil.getStatusCode(RegistrationExceptionTypeCode.PACKET_UIN_GENERATION_FAILED));
+			description.setMessage("National ID generation failed: " + e.getMessage());
+			description.setCode(PlatformErrorMessages.RPR_BDD_UNKNOWN_EXCEPTION.getCode());
 			object.setInternalError(Boolean.TRUE);
 			object.setRid(registrationStatusDto.getRegistrationId());
 		} catch (Exception ex) {
@@ -1129,6 +1182,153 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 			object.setIsValid(true);
 		} else {
 			object.setIsValid(false);
+		}
+	}
+
+	/**
+	 * Generate national ID and add it to demographic identity
+	 *
+	 * @param registrationId the registration ID
+	 * @param process the process type
+	 * @return the generated national ID
+	 * @throws NationalIdGenerationException if generation fails
+	 * @throws PacketManagerException if packet reading fails
+	 * @throws ApisResourceAccessException if API access fails
+	 * @throws io.mosip.kernel.core.util.exception.JsonProcessingException if JSON processing fails
+	 */
+	private String generateAndAddNationalId(String registrationId, String process)
+			throws NationalIdGenerationException, PacketManagerException, ApisResourceAccessException,
+			io.mosip.kernel.core.util.exception.JsonProcessingException {
+
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+				"Starting national ID generation for registration: " + registrationId);
+
+		// Extract citizen type from demographic identity
+		boolean isCitizen = true;
+
+		try {
+			// Try to get citizen type from packet (may be multi-language JSON)
+			String citizenTypeRaw = packetManagerService.getField(registrationId, citizenTypeFieldName, process, ProviderStageName.UIN_GENERATOR);
+
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+					"Residence status value before extraction: " + citizenTypeRaw);
+
+			if (citizenTypeRaw != null && !citizenTypeRaw.isEmpty()) {
+				// Extract value in preferred language (e.g., "por")
+				String citizenTypeValue = extractLanguageValue(citizenTypeRaw, nationalIdPreferredLanguage);
+
+				if (citizenTypeValue != null && !citizenTypeValue.isEmpty()) {
+					// Check if the value matches the citizen value (case-insensitive)
+					isCitizen = citizenTypeValue.trim().equalsIgnoreCase(citizenValue);
+					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+							"Citizen type extracted (" + nationalIdPreferredLanguage + "): " + citizenTypeValue + ", isCitizen: " + isCitizen);
+				} else {
+					regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+							"Citizen type value extraction failed. Defaulting to citizen.");
+				}
+			} else {
+				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+						"Citizen type field '" + citizenTypeFieldName + "' not found or empty. Defaulting to citizen.");
+			}
+		} catch (Exception e) {
+			regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+					"Failed to extract citizen type field '" + citizenTypeFieldName + "': " + e.getMessage() + ". Defaulting to citizen.");
+		}
+
+		// Extract district/region from demographic identity
+		String districtName = null;
+		try {
+			// Try to get district from packet (may be multi-language JSON)
+			String districtRaw = packetManagerService.getField(registrationId, districtFieldName, process, ProviderStageName.UIN_GENERATOR);
+
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+					"District value before extraction: " + districtRaw);
+
+			if (districtRaw != null && !districtRaw.isEmpty()) {
+				// Extract value in preferred language (e.g., "por")
+				districtName = extractLanguageValue(districtRaw, nationalIdPreferredLanguage);
+
+				if (districtName == null || districtName.isEmpty()) {
+					regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+							"District value extraction failed. Using default district code.");
+					districtName = "DEFAULT";
+				} else {
+					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+							"District extracted (" + nationalIdPreferredLanguage + "): " + districtName);
+				}
+			} else {
+				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+						"District field '" + districtFieldName + "' not found or empty. Using default district code.");
+				districtName = "DEFAULT";
+			}
+		} catch (Exception e) {
+			regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+					"Failed to extract district field '" + districtFieldName + "': " + e.getMessage() + ". Using default district code.");
+			districtName = "DEFAULT";
+		}
+
+		// Generate the national ID
+		String nationalId = nationalIdGenerator.generateNationalId(registrationId, isCitizen, districtName);
+
+		if (nationalId == null || nationalId.isEmpty()) {
+			throw new NationalIdGenerationException("Generated national ID is null or empty for registration: " + registrationId);
+		}
+
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+				"Successfully generated and added national ID: " + nationalId + " to demographic identity");
+
+		return nationalId;
+	}
+
+	/**
+	 * Extract value from multi-language JSON array
+	 *
+	 * Format: [{"language":"por","value":"Cidadão"},{"language":"eng","value":"Citizen"}]
+	 *
+	 * @param jsonString the multi-language JSON string
+	 * @param language the preferred language code (e.g., "por", "eng")
+	 * @return the value in the preferred language, or first available value, or original string
+	 */
+	private String extractLanguageValue(String jsonString, String language) {
+		if (jsonString == null || jsonString.trim().isEmpty()) {
+			return null;
+		}
+		try {
+			// Check if it's a JSON array
+			String trimmed = jsonString.trim();
+			if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+				JSONArray jsonArray = new JSONArray(trimmed);
+				String fallbackValue = null;
+
+				// Look for preferred language
+				for (int i = 0; i < jsonArray.length(); i++) {
+					org.json.JSONObject obj = jsonArray.getJSONObject(i);
+					if (obj.has("language") && obj.has("value")) {
+						String lang = obj.getString("language");
+						String value = obj.getString("value");
+
+						// Save first value as fallback
+						if (fallbackValue == null) {
+							fallbackValue = value;
+						}
+
+						// Return if preferred language found
+						if (lang.equalsIgnoreCase(language)) {
+							return value;
+						}
+					}
+				}
+				// Return fallback (first value) if preferred language not found
+				return fallbackValue != null ? fallbackValue : jsonString;
+			} else {
+				// Not a JSON array, return as-is
+				return jsonString;
+			}
+		} catch (Exception e) {
+			// If JSON parsing fails, return original string
+			regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), "UINGeneratorStage", "extractLanguageValue",
+					"Failed to parse multi-language JSON: " + e.getMessage() + ". Returning original value.");
+			return jsonString;
 		}
 	}
 }
