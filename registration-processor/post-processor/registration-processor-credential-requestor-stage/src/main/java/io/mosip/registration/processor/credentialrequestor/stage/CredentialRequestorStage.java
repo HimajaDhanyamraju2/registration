@@ -133,7 +133,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.auth:Bearer 70e09182bf0e4abf81a431d89b066bb1}")
 	private String credIssuerAuthHeader;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:1A1911ABDEC6}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:DDA170E76BA1}")
 	private String credIssuerTemplateId;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:CHAS-7EAA8DD9}")
@@ -430,7 +430,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
+					"PrintServiceImpl::callCredIssuer():: credIssuer API request created with identifier: " + identifier);
 
 			HttpHeaders headers = new HttpHeaders();
 			headers.set("Authorization", credIssuerAuthHeader);
