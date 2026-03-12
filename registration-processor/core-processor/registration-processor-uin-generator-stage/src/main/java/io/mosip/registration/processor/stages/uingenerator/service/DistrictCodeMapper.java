@@ -99,26 +99,4 @@ public class DistrictCodeMapper {
 
         return code;
     }
-
-    /**
-     * Check if a district is mapped
-     *
-     * @param districtName the district name
-     * @return true if mapped, false otherwise
-     */
-    public boolean isDistrictMapped(String districtName) {
-        if (districtName == null || districtName.isEmpty()) {
-            return false;
-        }
-        return districtCodeMap.containsKey(districtName.trim().toUpperCase());
-    }
-
-    /**
-     * Get all mapped districts
-     *
-     * @return map of district names to codes
-     */
-    public Map<String, String> getAllMappings() {
-        return new HashMap<>(districtCodeMap);
-    }
 }

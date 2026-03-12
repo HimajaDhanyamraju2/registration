@@ -95,23 +95,20 @@ public class NationalIdGenerator {
             if (recentlyGeneratedIds.add(nationalId)) {
                 manageCache(nationalId);
                 regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-                        "Successfully generated national ID: " + nationalId +
-                                " (Type: " + citizenType + ", District Code: " + districtCode +
+                        "Successfully generated national ID (Type: " + citizenType + ", District Code: " + districtCode +
                                 ", Attempts: " + attempts + ", Cache size: " + recentlyGeneratedIds.size() + ")");
                 return nationalId;
             }
 
             // This ID was recently used, try again
             regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-                    "National ID found in recent cache, retrying: " + nationalId +
-                    " (Attempt " + attempts + "/" + effectiveMaxAttempts + ")");
+                    "National ID found in recent cache, retrying: (Attempt " + attempts + "/" + effectiveMaxAttempts + ")");
         }
 
         // After max attempts, return the last generated ID anyway
         // ID Repo will handle if it's truly a duplicate
         regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-                "Reached max attempts (" + effectiveMaxAttempts + "), returning last generated ID: " + nationalId +
-                ". ID Repo will handle if duplicate exists.");
+                "Reached max attempts (" + effectiveMaxAttempts + "), returning last generated ID. ID Repo will handle if duplicate exists.");
 
         if (recentlyGeneratedIds.add(nationalId)) {
             manageCache(nationalId);
@@ -133,10 +130,8 @@ public class NationalIdGenerator {
             synchronized (recentlyGeneratedIds) {
                 // Double-check after acquiring lock
                 if (recentlyGeneratedIds.size() > effectiveCacheSize) {
-                    regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
-                            "NationalIdGenerator", "addToCache",
-                            "Cache size exceeded " + effectiveCacheSize + ", flushing cache. " +
-                            "Current size: " + recentlyGeneratedIds.size());
+                    regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),"NationalIdGenerator", "manageCache",
+                            "Cache size exceeded " + effectiveCacheSize + ", flushing cache. " + "Current size: " + recentlyGeneratedIds.size());
                     recentlyGeneratedIds.clear();
                     // Re-add the current ID
                     recentlyGeneratedIds.add(nationalId);

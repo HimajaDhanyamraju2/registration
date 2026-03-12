@@ -1218,9 +1218,6 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 			// Try to get citizen type from packet (may be multi-language JSON)
 			String citizenTypeRaw = packetManagerService.getField(registrationId, citizenTypeFieldName, process, ProviderStageName.UIN_GENERATOR);
 
-			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-					"Residence status value before extraction: " + citizenTypeRaw);
-
 			if (citizenTypeRaw != null && !citizenTypeRaw.isEmpty()) {
 				// Extract value in preferred language (e.g., "por")
 				String citizenTypeValue = extractLanguageValue(citizenTypeRaw, nationalIdPreferredLanguage);
@@ -1229,7 +1226,7 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 					// Check if the value matches the citizen value (case-insensitive)
 					isCitizen = citizenTypeValue.trim().equalsIgnoreCase(citizenValue);
 					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-							"Citizen type extracted (" + nationalIdPreferredLanguage + "): " + citizenTypeValue + ", isCitizen: " + isCitizen);
+							"Citizen type value extracted");
 				} else {
 					regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
 							"Citizen type value extraction failed. Defaulting to citizen.");
@@ -1249,9 +1246,6 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 			// Try to get district from packet (may be multi-language JSON)
 			String districtRaw = packetManagerService.getField(registrationId, districtFieldName, process, ProviderStageName.UIN_GENERATOR);
 
-			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-					"District value before extraction: " + districtRaw);
-
 			if (districtRaw != null && !districtRaw.isEmpty()) {
 				// Extract value in preferred language (e.g., "por")
 				districtName = extractLanguageValue(districtRaw, nationalIdPreferredLanguage);
@@ -1262,7 +1256,7 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 					districtName = "DEFAULT";
 				} else {
 					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-							"District extracted (" + nationalIdPreferredLanguage + "): " + districtName);
+							"District value extracted");
 				}
 			} else {
 				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,

@@ -145,6 +145,9 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mode:issue_and_notify}")
 	private String credIssuerModeOfIssuance;
 
+	@Value("${mosip.regproc.national-id.field-name:nationalId}")
+	private String nationalIdFieldName;
+
 	/** Mosip router for APIs */
 	@Autowired
 	MosipRouter router;
@@ -207,6 +210,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 		boolean isTransactionSuccessful = false;
 		String uin = null;
+		String nid = null;
 		String refIds = null;
 		String regId = object.getRid();
 		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
@@ -224,6 +228,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			registrationStatusDto.setRegistrationStageName(getStageName());
 			JSONObject jsonObject = utilities.idrepoRetrieveIdentityByRid(regId);
 			uin = JsonUtil.getJSONValue(jsonObject, IdType.UIN.toString());
+			nid = JsonUtil.getJSONValue(jsonObject, nationalIdFieldName);
 			if (uin == null) {
 				regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
 						LoggerFileConstant.REGISTRATIONID.toString(), null,
@@ -293,7 +298,8 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					}
 				}
 				if (isTransactionSuccessful) {
-					callCredIssuer(regId, uin, registrationStatusDto.getRegistrationType());
+					String identifier = (nid != null && !nid.isEmpty()) ? nid : uin;
+					callCredIssuer(regId, identifier, registrationStatusDto.getRegistrationType());
 					registrationStatusDto.setRefId(refIds);
 					object.setIsValid(Boolean.TRUE);
 					description.setMessage(PlatformSuccessMessages.RPR_PRINT_STAGE_REQUEST_SUCCESS.getMessage());
@@ -415,13 +421,13 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		}
 	}
 
-	private void callCredIssuer(String regId, String uin, String process) {
+	private void callCredIssuer(String regId, String identifier, String process) {
 		try {
 			// Get dynamic field values from packet
 			Map<String, String> fieldMap = getCredentialFieldMap(regId, process);
 
 			// Build request dynamically using extracted values
-			Map<String, Object> request = buildCredIssuerRequest(regId, uin, fieldMap);
+			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
 					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
@@ -445,8 +451,6 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 	private Map<String, String> getCredentialFieldMap(String regId, String process) {
 		try {
-			List<String> fields = new ArrayList<>();
-
 			JSONObject regProcessorIdentityJson = utilities.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
 
 			String dob = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.DOB),
@@ -456,17 +460,8 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			String email = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
 					MappingJsonConstants.VALUE);
 
-			fields.add("firstName");
-			fields.add("surname");
-			fields.add("addressLine1");
-			fields.add("addressLine2");
-			fields.add("municipality");
-			fields.add("town");
-			fields.add(dob);
-			fields.add(gender);
-			fields.add(email);
-			fields.add("height");
-			fields.add("countryOfCitizenship");
+			List<String> fields = new ArrayList<>(Arrays.asList("firstName","surname","addressLine1","addressLine2",
+					"municipality","town",dob,gender,email,"height","countryOfCitizenship"));
 
 			Map<String, String> fieldMap = utilities.getPacketManagerService()
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
@@ -544,7 +539,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		}
 	}
 
-	private Map<String, Object> buildCredIssuerRequest(String regId, String uin, Map<String, String> fieldMap) {
+	private Map<String, Object> buildCredIssuerRequest(String regId, String identifier, Map<String, String> fieldMap) {
 		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
 				"PrintServiceImpl::buildCredIssuerRequest():: Building credIssuer API request");
 
@@ -567,7 +562,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		credentialData.put("firstName", getFieldValue(fieldMap, "firstName", preferredLang));
 		credentialData.put("sex", getFieldValue(fieldMap, "gender", preferredLang));
 		credentialData.put("height", getFieldValue(fieldMap, "height", preferredLang));
-		credentialData.put("NID", uin != null ? uin : regId);
+		credentialData.put("NID", identifier != null ? identifier : regId);
 		credentialData.put("nationality", getFieldValue(fieldMap, "countryOfCitizenship", preferredLang));
 		credentialData.put("expiresAt", "2027-02-06T00:00:00.000Z");
 		credentialData.put("dateOfBirth", convertToISODate(getFieldValue(fieldMap, "dateOfBirth", preferredLang)));
