@@ -453,15 +453,11 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		try {
 			JSONObject regProcessorIdentityJson = utilities.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
 
-			String dob = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.DOB),
-					MappingJsonConstants.VALUE);
 			String gender = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.GENDER),
 					MappingJsonConstants.VALUE);
-			String email = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
-					MappingJsonConstants.VALUE);
 
-			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "addressLine1", "addressLine2", "addressLine3",
-					"region", "province", "city", "zone", "postalCode", dob, gender, email, "residenceStatus"));
+			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "region", "province", "city", 
+				"zone", "postalCode", "dateOfBirth", gender, "residenceStatus"));
 
 			Map<String, String> fieldMap = packetManagerService
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
@@ -488,7 +484,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 				}
 			}
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::getCredentialFieldMap():: Fetched field values for credIssuer API request");
+					"PrintServiceImpl::getCredentialFieldMap():: Fetched field values for credIssuer API request: " + fieldMap);
 			return fieldMap;
 		} catch (Throwable t) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
@@ -548,25 +544,40 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			nationality = "Foreigner";
 		}
 
+		String fullName = getFieldValue(fieldMap, "fullName", preferredLang);
+
+		String givenName = "";
+		String surName = "";
+
+		if (fullName != null && !fullName.trim().isEmpty()) {
+			String[] nameParts = fullName.trim().split("\\s+");
+
+			if (nameParts.length == 1) {
+				// Only one name → use it for both (fallback)
+				givenName = nameParts[0];
+				surName = nameParts[0];
+			} else {
+				givenName = nameParts[0]; // first word
+				surName = nameParts[nameParts.length - 1]; // last word
+			}
+		}
+
 		issuerInfo.put("org_code", issuerOrgCode);
 		issuerInfo.put("email", issuerEmail);
 		request.put("issuer_info", issuerInfo);
 		request.put("issuer_credential_template_id", credIssuerTemplateId);
 
 		Map<String, Object> credentialData = new HashMap<>();
-		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
-		credentialData.put("addressLine1", getFieldValue(fieldMap, "addressLine1", preferredLang));
-		credentialData.put("addressLine2", getFieldValue(fieldMap, "addressLine2", preferredLang));
-		credentialData.put("addressLine3", getFieldValue(fieldMap, "addressLine3", preferredLang));
-		credentialData.put("addressLine4", getFieldValue(fieldMap, "city", preferredLang));
-		credentialData.put("surnameLine1", "");
-		credentialData.put("surnameLine2", "");
-		credentialData.put("firstName", getFieldValue(fieldMap, "fullName", preferredLang));
+		credentialData.put("villageName", getFieldValue(fieldMap, "city", preferredLang));
+		credentialData.put("chief", "Munkonge");
+		credentialData.put("district", getFieldValue(fieldMap, "province", preferredLang));
+		credentialData.put("givenName", givenName);
+		credentialData.put("surName", surName);
 		credentialData.put("sex", getFieldValue(fieldMap, "gender", preferredLang));
-		credentialData.put("height", "162");
-		credentialData.put("NID", identifier != null ? identifier : regId);
+		credentialData.put("nrcNumber", identifier != null ? identifier : regId);
+		credentialData.put("placeOfBirth", getFieldValue(fieldMap, "city", preferredLang));
 		credentialData.put("nationality", nationality);
-		credentialData.put("expiresAt", "2027-02-06T00:00:00.000Z");
+		credentialData.put("dateOfIssue", LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC).toString());
 		credentialData.put("dateOfBirth", convertToISODate(getFieldValue(fieldMap, "dateOfBirth", preferredLang)));
 
 		Map<String, Object> photo = new HashMap<>();
