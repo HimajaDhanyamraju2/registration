@@ -8,12 +8,9 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
+import io.mosip.registration.processor.packet.storage.dto.IdRequestDTO1;
 import org.apache.commons.lang.StringUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -854,6 +851,59 @@ public class Utilities {
 		String centerId = id.substring(0, centerIdLength);
 		String machineId = id.substring(centerIdLength, centerIdLength + machineIdLength);
 		return centerId + "_" + machineId;
+	}
+
+	public String getUINByHandle(String id, String process, ProviderStageName stageName) throws IOException, ApisResourceAccessException, PacketManagerException,
+			JsonProcessingException {
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+				"Utilities::getUINByHandle()::entry");
+
+		// In MappingJsonConstants you use your handleIdType
+		String handleIdValue = packetManagerService.getFieldByMappingJsonKey(id, MappingJsonConstants.HANDLE_ID_TYPE,
+				process, stageName);
+
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), id,
+				"Utilities::getUINByHandle()::handleRetrieved");
+
+		JSONObject jsonObject = getIdentityJSONObjectByHandle(handleIdValue);
+		return JsonUtil.getJSONValue(jsonObject, "UIN");
+	}
+
+
+	public JSONObject getIdentityJSONObjectByHandle(String handleIdValue)
+			throws ApisResourceAccessException {
+		if (handleIdValue != null) {
+			IdRequestDTO1 idRequestDTO = new IdRequestDTO1();
+			idRequestDTO.setId(handleIdValue.concat("@handleIdType").toLowerCase(Locale.ROOT));
+			idRequestDTO.setIdType("handleIdType");
+
+			IdResponseDTO1 idResponseDto = (IdResponseDTO1) restClientService.postApi(
+					ApiName.IDREPOGETIDBYUIN, "", "", idRequestDTO,
+					IdResponseDTO1.class);
+
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+					"Utilities::getUINByHandle():: IDREPORETRIEVEIDBYID POST service call ended Successfully");
+
+			if (idResponseDto != null && idResponseDto.getResponse() != null) {
+				try {
+					ResponseDTO responseDTO = idResponseDto.getResponse();
+					String response = objMapper.writeValueAsString(responseDTO.getIdentity());
+
+					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(),
+							"", "Utilities::getIdentityJSONObjectByHandle():: IDREPORETRIEVEIDBYID POST service call ended Successfully");
+
+					return (JSONObject) new JSONParser().parse(response);
+				} catch (org.json.simple.parser.ParseException | com.fasterxml.jackson.core.JsonProcessingException e) {
+					regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(),
+							"", ExceptionUtils.getStackTrace(e));
+					throw new IdRepoAppException("Error while parsing string to JSONObject", e);
+				}
+			} else {
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.UIN.toString(), "",
+						"Utilities::getIdentityJSONObjectByHandle():: IDREPORETRIEVEIDBYID POST service Returned NULL");
+			}
+		}
+		return null;
 	}
 
 }

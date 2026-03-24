@@ -280,11 +280,11 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 				loadDemographicIdentity(fieldMap, demographicIdentity);
 
 				// Generate and add National ID to demographic identity before sending to ID Repo
-				if (enableNationalIdGeneration && (StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null"))) {
+				if (enableNationalIdGeneration && (StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null"))
+						&& RegistrationType.NEW.toString().equalsIgnoreCase(object.getReg_type())) {
 					try {
 						String nationalId = generateAndAddNationalId(registrationId, registrationStatusDto.getRegistrationType());
-						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
-								LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
 								"Generated National ID: " + nationalId);
 						demographicIdentity.put(nationalIdFieldName, nationalId);
 						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
@@ -295,15 +295,26 @@ public class UinGeneratorStage extends MosipVerticleAPIManager {
 						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
 								"Added selectedHandles to demographic identity");
 					} catch (Exception e) {
-						regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
-								LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+						regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
 								"Failed to generate National ID: " + e.getMessage());
 						throw e;
 					}
 				}
 
-				if (StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null") ) {
+				if ((StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null")) &&
+						(RegistrationType.UPDATE.toString().equalsIgnoreCase(object.getReg_type()) || (RegistrationType.RES_UPDATE.toString().equalsIgnoreCase(object.getReg_type())))) {
+					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+							"UIN not found in UPDATE flow, fetching using handle value");
+					String handleField = fieldMap.get(MappingJsonConstants.HANDLE_ID_TYPE);
+					if (StringUtils.isNotEmpty(handleField) && !handleField.equalsIgnoreCase("null")) {
+						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+								"Handle field found, fetching using handle value: " + handleField);
+						JSONObject jsonObject = utility.getIdentityJSONObjectByHandle(handleField);
+						uinField = JsonUtil.getJSONValue(jsonObject, "UIN");
+					}
+				}
 
+				if (StringUtils.isEmpty(uinField) || uinField.equalsIgnoreCase("null") ) {
 					idResponseDTO = sendIdRepoWithUin(registrationId, registrationStatusDto.getRegistrationType(), demographicIdentity,
 							uinField);
 
