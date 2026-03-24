@@ -1,6 +1,10 @@
 package io.mosip.registration.processor.credentialrequestor.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.mosip.biometrics.util.ConvertRequestDto;
+import io.mosip.biometrics.util.face.FaceDecoder;
+import io.mosip.kernel.biometrics.entities.BIR;
+import io.mosip.kernel.biometrics.entities.BiometricRecord;
 import io.mosip.kernel.core.exception.BaseUncheckedException;
 import io.mosip.kernel.core.exception.ServiceError;
 import io.mosip.kernel.core.logger.spi.Logger;
@@ -48,6 +52,8 @@ import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -56,7 +62,9 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -119,6 +127,24 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 	@Value("${mosip.registration.processor.encrypt:false}")
 	private boolean encrypt;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.url:https://sziissuer.techno-associates.live/api/credentials/issue/client/bulk}")
+	private String credIssuerUrl;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.auth:Bearer 83d6348e791046c59202240b15eda514}")
+	private String credIssuerAuthHeader;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:A6A6022FD1EE}")
+	private String credIssuerTemplateId;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:cr}")
+	private String issuerOrgCode;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-email:issuer.national.id@example.com}")
+	private String issuerEmail;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.mode:issue_and_notify}")
+	private String credIssuerModeOfIssuance;
 
 	/** Mosip router for APIs */
 	@Autowired
@@ -271,6 +297,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					}
 				}
 				if (isTransactionSuccessful) {
+					callCredIssuer(regId, uin, registrationStatusDto.getRegistrationType());
 					registrationStatusDto.setRefId(refIds);
 					object.setIsValid(Boolean.TRUE);
 					description.setMessage(PlatformSuccessMessages.RPR_PRINT_STAGE_REQUEST_SUCCESS.getMessage());
@@ -394,9 +421,172 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	}
 
 
+	private void callCredIssuer(String regId, String identifier, String process) {
+		try {
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"PrintServiceImpl: Entered callCredIssuer method with UIN: " + identifier);
+
+			Map<String, String> fieldMap = getCredentialFieldMap(regId, process);
+			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
+
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"PrintServiceImpl::callCredIssuer():: credIssuer API request created with identifier: " + identifier);
+
+			HttpHeaders headers = new HttpHeaders();
+			headers.set("Authorization", credIssuerAuthHeader);
+			headers.setContentType(MediaType.APPLICATION_JSON);
+			HttpEntity<Object> requestEntity = new HttpEntity<>(request, headers);
+			List<String> queryParamNames = Arrays.asList("credential_template", "mode_of_issuance");
+			List<Object> queryParamValues = Arrays.asList(credIssuerTemplateId, credIssuerModeOfIssuance);
+			restClientService.postApi(credIssuerUrl, MediaType.APPLICATION_JSON, null, queryParamNames, queryParamValues,
+					requestEntity, Object.class);
+
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"PrintServiceImpl::callCredIssuer():: credIssuer API called successfully");
+		} catch (Exception e) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+					regId, "CredIssuer call failed: " + e.getMessage() + ExceptionUtils.getStackTrace(e));
+		}
+	}
+
+	private Map<String, String> getCredentialFieldMap(String regId, String process) {
+		try {
+			JSONObject regProcessorIdentityJson = utilities.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
+
+			String dob = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.DOB),
+					MappingJsonConstants.VALUE);
+			String gender = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.GENDER),
+					MappingJsonConstants.VALUE);
+			String email = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.EMAIL),
+					MappingJsonConstants.VALUE);
+
+			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "addressLine1", "addressLine2", "addressLine3",
+					"region", "province", "city", "zone", "postalCode", dob, gender, email, "residenceStatus"));
+
+			Map<String, String> fieldMap = packetManagerService
+					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
+
+			List<String> modalities = List.of("Face");
+			String individualBiometricsLabel = JsonUtil.getJSONValue(
+					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.INDIVIDUAL_BIOMETRICS),
+					MappingJsonConstants.VALUE);
+			BiometricRecord biometricRecord = packetManagerService.getBiometrics(
+					regId, individualBiometricsLabel, modalities, process, ProviderStageName.CREDENTIAL_REQUESTOR);
+			List<BIR> segments = biometricRecord.getSegments();
+
+			for (BIR bir : segments) {
+				if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
+					byte[] isoBytes = bir.getBdb();
+
+					ConvertRequestDto convertRequestDto = new ConvertRequestDto();
+					convertRequestDto.setInputBytes(isoBytes);
+					convertRequestDto.setVersion("ISO19794_5_2011");
+
+					byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
+					String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
+					fieldMap.put("face", faceBase64);
+				}
+			}
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"PrintServiceImpl::getCredentialFieldMap():: Fetched field values for credIssuer API request");
+			return fieldMap;
+		} catch (Throwable t) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+					"Failed to extract credential fields (Throwable): " + t);
+			return Collections.emptyMap();
+		}
+	}
+
+	private String getFieldValue(Map<String, String> fieldMap, String key, String preferredLang) {
+		String value = fieldMap.get(key);
+		if (value == null) return "";
+		if (value.trim().startsWith("[")) {
+			return extractLocalizedValue(value, preferredLang);
+		}
+		return value;
+	}
+
+	private String extractLocalizedValue(String jsonArrayString, String preferredLang) {
+		try {
+			List<Map<String, Object>> list = mapper.readValue(jsonArrayString, List.class);
+			for (Map<String, Object> item : list) {
+				if (preferredLang.equalsIgnoreCase((String) item.get("language"))) {
+					return (String) item.get("value");
+				}
+			}
+			return list.isEmpty() ? null : (String) list.get(0).get("value");
+		} catch (Exception e) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+					"Failed to parse localized field: " + e.getMessage());
+			return null;
+		}
+	}
+
+	private String convertToISODate(String date) {
+		try {
+			if (date == null) return null;
+			LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+			return localDate.atStartOfDay().toInstant(ZoneOffset.UTC).toString();
+		} catch (Exception e) {
+			return date;
+		}
+	}
+
+	private Map<String, Object> buildCredIssuerRequest(String regId, String identifier, Map<String, String> fieldMap) {
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+				"PrintServiceImpl::buildCredIssuerRequest():: Building credIssuer API request");
+
+		Map<String, Object> request = new HashMap<>();
+		Map<String, Object> issuerInfo = new HashMap<>();
+		String preferredLang = "eng";
+
+		String residenceStatus = getFieldValue(fieldMap, "residenceStatus", preferredLang);
+		String nationality;
+		if ("Non-Foreigner".equalsIgnoreCase(residenceStatus)) {
+			nationality = "Zambia";
+		} else {
+			nationality = "Foreigner";
+		}
+
+		issuerInfo.put("org_code", issuerOrgCode);
+		issuerInfo.put("email", issuerEmail);
+		request.put("issuer_info", issuerInfo);
+		request.put("issuer_credential_template_id", credIssuerTemplateId);
+
+		Map<String, Object> credentialData = new HashMap<>();
+		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
+		credentialData.put("addressLine1", getFieldValue(fieldMap, "addressLine1", preferredLang));
+		credentialData.put("addressLine2", getFieldValue(fieldMap, "addressLine2", preferredLang));
+		credentialData.put("addressLine3", getFieldValue(fieldMap, "addressLine3", preferredLang));
+		credentialData.put("addressLine4", getFieldValue(fieldMap, "city", preferredLang));
+		credentialData.put("surnameLine1", "");
+		credentialData.put("surnameLine2", "");
+		credentialData.put("firstName", getFieldValue(fieldMap, "fullName", preferredLang));
+		credentialData.put("sex", getFieldValue(fieldMap, "gender", preferredLang));
+		credentialData.put("height", "162");
+		credentialData.put("NID", identifier != null ? identifier : regId);
+		credentialData.put("nationality", nationality);
+		credentialData.put("expiresAt", "2027-02-06T00:00:00.000Z");
+		credentialData.put("dateOfBirth", convertToISODate(getFieldValue(fieldMap, "dateOfBirth", preferredLang)));
+
+		Map<String, Object> photo = new HashMap<>();
+		photo.put("storage", "base64");
+		photo.put("name", "photograph.jpg");
+		String faceFromPacket = getFieldValue(fieldMap, "face", preferredLang);
+		photo.put("url", "data:image/jpg;base64," + faceFromPacket);
+		photo.put("size", 1);
+		photo.put("type", "image/jpg");
+		photo.put("originalName", "photograph.jpg");
+		photo.put("hash", "");
+		credentialData.put("photo", Collections.singletonList(photo));
+
+		request.put("credential_data", Collections.singletonList(credentialData));
+		return request;
+	}
+
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see io.vertx.core.AbstractVerticle#start()
 	 */
 	@Override

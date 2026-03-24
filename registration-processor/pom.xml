@@ -145,6 +145,7 @@
 		<kernel.bom.version>1.3.0</kernel.bom.version>
         <kernel.websubclient.api.version>1.3.0</kernel.websubclient.api.version>
         <kernel-idvalidator-vid.version>1.3.0</kernel-idvalidator-vid.version>
+		<biometrics.util.version>1.3.0</biometrics.util.version>
 		<sonar.coverage.exclusions>**/dto/**,
 			**/exception/*Exception.java,
 			**/config/*Config.java,
