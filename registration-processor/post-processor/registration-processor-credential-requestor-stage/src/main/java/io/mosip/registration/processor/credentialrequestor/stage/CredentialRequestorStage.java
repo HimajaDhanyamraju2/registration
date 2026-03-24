@@ -1,8 +1,6 @@
 package io.mosip.registration.processor.credentialrequestor.stage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.mosip.biometrics.util.ConvertRequestDto;
-import io.mosip.biometrics.util.face.FaceDecoder;
 import io.mosip.kernel.biometrics.entities.BIR;
 import io.mosip.kernel.biometrics.entities.BiometricRecord;
 import io.mosip.kernel.core.exception.BaseUncheckedException;
@@ -473,12 +471,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			for (BIR bir : segments) {
 				if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
 					byte[] isoBytes = bir.getBdb();
-
-					ConvertRequestDto convertRequestDto = new ConvertRequestDto();
-					convertRequestDto.setInputBytes(isoBytes);
-					convertRequestDto.setVersion("ISO19794_5_2011");
-
-					byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
+					byte[] imageBytes = extractImageFromISO(isoBytes);
 					String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
 					fieldMap.put("face", faceBase64);
 				}
@@ -491,6 +484,17 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					"Failed to extract credential fields (Throwable): " + t);
 			return Collections.emptyMap();
 		}
+	}
+
+	private byte[] extractImageFromISO(byte[] isoBytes) {
+		// ISO 19794-5 embeds JPEG data — locate it via JPEG magic bytes (0xFF 0xD8 0xFF)
+		for (int i = 0; i < isoBytes.length - 2; i++) {
+			if ((isoBytes[i] & 0xFF) == 0xFF && (isoBytes[i + 1] & 0xFF) == 0xD8 && (isoBytes[i + 2] & 0xFF) == 0xFF) {
+				return Arrays.copyOfRange(isoBytes, i, isoBytes.length);
+			}
+		}
+		// No JPEG marker found — return raw bytes as fallback
+		return isoBytes;
 	}
 
 	private String getFieldValue(Map<String, String> fieldMap, String key, String preferredLang) {
