@@ -424,13 +424,13 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	private void callCredIssuer(String regId, String identifier, String process) {
 		try {
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl: Entered callCredIssuer method with UIN: " + identifier);
+					"PrintServiceImpl: Entered callCredIssuer method");
 
 			Map<String, String> fieldMap = getCredentialFieldMap(regId, process);
 			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::callCredIssuer():: credIssuer API request created with identifier: " + identifier);
+					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
 
 			HttpHeaders headers = new HttpHeaders();
 			headers.set("Authorization", credIssuerAuthHeader);
@@ -484,7 +484,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 				}
 			}
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::getCredentialFieldMap():: Fetched field values for credIssuer API request: "+ fieldMap);
+					"PrintServiceImpl::getCredentialFieldMap():: Fetched field values for credIssuer API request");
 			return fieldMap;
 		} catch (Throwable t) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
