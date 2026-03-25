@@ -457,7 +457,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					MappingJsonConstants.VALUE);
 
 			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "region", "province", "city", 
-				"zone", "postalCode", "dateOfBirth", gender, "residenceStatus"));
+				"zone", "postalCode", "dateOfBirth", gender, "email", "residenceStatus"));
 
 			Map<String, String> fieldMap = packetManagerService
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
@@ -568,6 +568,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		request.put("issuer_credential_template_id", credIssuerTemplateId);
 
 		Map<String, Object> credentialData = new HashMap<>();
+		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
 		credentialData.put("villageName", getFieldValue(fieldMap, "city", preferredLang));
 		credentialData.put("chief", "Munkonge");
 		credentialData.put("district", getFieldValue(fieldMap, "province", preferredLang));
