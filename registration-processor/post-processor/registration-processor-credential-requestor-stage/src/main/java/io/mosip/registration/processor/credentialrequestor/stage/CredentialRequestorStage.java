@@ -134,7 +134,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.auth:Bearer 83d6348e791046c59202240b15eda514}")
 	private String credIssuerAuthHeader;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:94190B40EBC0}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:C9494D7E8BEC}")
 	private String credIssuerTemplateId;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:cr}")
@@ -145,6 +145,9 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mode:issue_and_notify}")
 	private String credIssuerModeOfIssuance;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.mrz-country-code:ZMB}")
+	private String mrzCountryCode;
 
 	/** Mosip router for APIs */
 	@Autowired
@@ -539,7 +542,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		String residenceStatus = getFieldValue(fieldMap, "residenceStatus", preferredLang);
 		String nationality;
 		if ("Non-Foreigner".equalsIgnoreCase(residenceStatus)) {
-			nationality = "Zambia";
+			nationality = "Zambian";
 		} else {
 			nationality = "Foreigner";
 		}
@@ -567,19 +570,25 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		request.put("issuer_info", issuerInfo);
 		request.put("issuer_credential_template_id", credIssuerTemplateId);
 
+		String dobRaw = getFieldValue(fieldMap, "dateOfBirth", preferredLang);
+		String sex = toUpper(getFieldValue(fieldMap, "gender", preferredLang));
+		String docNumber = identifier != null ? identifier : regId;
+
 		Map<String, Object> credentialData = new HashMap<>();
 		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
-		credentialData.put("villageName", getFieldValue(fieldMap, "city", preferredLang));
-		credentialData.put("chief", "Munkonge");
-		credentialData.put("district", getFieldValue(fieldMap, "province", preferredLang));
-		credentialData.put("givenName", givenName);
-		credentialData.put("surName", surName);
-		credentialData.put("sex", getFieldValue(fieldMap, "gender", preferredLang));
-		credentialData.put("nrcNumber", identifier != null ? identifier : regId);
-		credentialData.put("placeOfBirth", getFieldValue(fieldMap, "city", preferredLang));
-		credentialData.put("nationality", nationality);
+		credentialData.put("villageName", toUpper(getFieldValue(fieldMap, "city", preferredLang)));
+		credentialData.put("chief", "MUNKONGE");
+		credentialData.put("district", toUpper(getFieldValue(fieldMap, "province", preferredLang)));
+		credentialData.put("givenName", toUpper(givenName));
+		credentialData.put("surName", toUpper(surName));
+		credentialData.put("sex", sex);
+		credentialData.put("nrcNumber", docNumber);
+		credentialData.put("placeOfBirth", toUpper(getFieldValue(fieldMap, "city", preferredLang)));
+		credentialData.put("nationality", toUpper(nationality));
 		credentialData.put("dateOfIssue", LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC).toString());
-		credentialData.put("dateOfBirth", convertToISODate(getFieldValue(fieldMap, "dateOfBirth", preferredLang)));
+		credentialData.put("dateOfBirth", convertToISODate(dobRaw));
+		credentialData.put("mrz_line_1", generateMrzLine1(toUpper(surName), toUpper(givenName)));
+		credentialData.put("mrz_line_2", generateMrzLine2(docNumber, toMrzDate(dobRaw), toMrzSex(sex), LocalDate.now().plusYears(10).format(DateTimeFormatter.ofPattern("yyMMdd"))));
 
 		Map<String, Object> photo = new HashMap<>();
 		photo.put("storage", "base64");
@@ -594,6 +603,83 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 		request.put("credential_data", Collections.singletonList(credentialData));
 		return request;
+	}
+
+	private String toUpper(String value) {
+		return value == null ? "" : value.toUpperCase();
+	}
+
+	private String toMrzString(String input) {
+		if (input == null) return "";
+		return input.toUpperCase().replaceAll("[^A-Z0-9]", "<");
+	}
+
+	private String mrzPadRight(String s, int length) {
+		if (s == null) s = "";
+		if (s.length() >= length) return s.substring(0, length);
+		StringBuilder sb = new StringBuilder(s);
+		while (sb.length() < length) sb.append('<');
+		return sb.toString();
+	}
+
+	private String toMrzDate(String date) {
+		try {
+			if (date == null || date.isEmpty()) return "<<<<<<";
+			LocalDate localDate;
+			if (date.contains("/")) {
+				localDate = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
+			} else {
+				localDate = LocalDate.parse(date.substring(0, 10));
+			}
+			return localDate.format(DateTimeFormatter.ofPattern("yyMMdd"));
+		} catch (Exception e) {
+			regProcLogger.error("Failed to convert date for MRZ: " + date);
+			return "<<<<<<";
+		}
+	}
+
+	private String toMrzSex(String sex) {
+		if (sex == null) return "<";
+		if (sex.toUpperCase().startsWith("M")) return "M";
+		if (sex.toUpperCase().startsWith("F")) return "F";
+		return "<";
+	}
+
+	private int computeMrzCheckDigit(String input) {
+		int[] weights = {7, 3, 1};
+		int sum = 0;
+		for (int i = 0; i < input.length(); i++) {
+			char c = input.charAt(i);
+			int value;
+			if (c >= '0' && c <= '9') value = c - '0';
+			else if (c >= 'A' && c <= 'Z') value = c - 'A' + 10;
+			else value = 0;
+			sum += value * weights[i % 3];
+		}
+		return sum % 10;
+	}
+
+	// TD3 MRZ line 1: P<{country}{SURNAME}<<{GIVENNAME} padded to 44 chars
+	private String generateMrzLine1(String surname, String givenName) {
+		String namePart = toMrzString(surname) + "<<" + toMrzString(givenName);
+		return mrzPadRight("P<" + mrzCountryCode + namePart, 44);
+	}
+
+	// TD3 MRZ line 2: 44 chars
+	// pos 1-9: doc num | pos 10: check | pos 11-13: nationality | pos 14-19: DOB
+	// pos 20: check | pos 21: sex | pos 22-27: expiry | pos 28: check
+	// pos 29-42: optional | pos 43: optional check | pos 44: composite check
+	private String generateMrzLine2(String docNumber, String mrzDob, String mrzSex, String mrzExpiry) {
+		String docNum = mrzPadRight(toMrzString(docNumber), 9);
+		String docCheck = String.valueOf(computeMrzCheckDigit(docNum));
+		String dobCheck = String.valueOf(computeMrzCheckDigit(mrzDob));
+		String expCheck = String.valueOf(computeMrzCheckDigit(mrzExpiry));
+		String optional = mrzPadRight("", 14);
+		String optCheck = String.valueOf(computeMrzCheckDigit(optional));
+		// Composite covers: docNum+docCheck + dob+dobCheck + expiry+expCheck + optional+optCheck
+		String composite = docNum + docCheck + mrzDob + dobCheck + mrzExpiry + expCheck + optional + optCheck;
+		String compCheck = String.valueOf(computeMrzCheckDigit(composite));
+		return docNum + docCheck + mrzCountryCode + mrzDob + dobCheck + mrzSex + mrzExpiry + expCheck + optional + optCheck + compCheck;
 	}
 
 	/*
