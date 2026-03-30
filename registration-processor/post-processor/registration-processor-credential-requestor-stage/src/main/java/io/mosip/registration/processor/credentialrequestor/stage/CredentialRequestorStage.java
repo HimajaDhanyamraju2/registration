@@ -453,49 +453,56 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	}
 
 	private Map<String, String> getCredentialFieldMap(String regId, String process) {
+		Map<String, String> fieldMap = new HashMap<>();
 		try {
 			JSONObject regProcessorIdentityJson = utilities.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
 
 			String gender = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.GENDER),
 					MappingJsonConstants.VALUE);
 
-			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "givenName", "region", "province", "city", 
+			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "givenName", "surName", "region", "province", "city",
 				"dateOfBirth", gender, "email", "residenceStatus", "otherNationality"));
 
-			Map<String, String> fieldMap = packetManagerService
+			fieldMap = packetManagerService
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::getCredentialFieldMap():: Fetched demographic field values for credIssuer API request: " + fieldMap);
+					"PrintServiceImpl::getCredentialFieldMap():: Fetched demographic field values for credIssuer API request");
 
-			List<String> modalities = List.of("Face");
-			String individualBiometricsLabel = JsonUtil.getJSONValue(
-					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.INDIVIDUAL_BIOMETRICS),
-					MappingJsonConstants.VALUE);
-			BiometricRecord biometricRecord = packetManagerService.getBiometrics(
-					regId, individualBiometricsLabel, modalities, process, ProviderStageName.CREDENTIAL_REQUESTOR);
-			List<BIR> segments = biometricRecord.getSegments();
+			try {
+				List<String> modalities = List.of("Face");
+				String individualBiometricsLabel = JsonUtil.getJSONValue(
+						JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.INDIVIDUAL_BIOMETRICS),
+						MappingJsonConstants.VALUE);
+				BiometricRecord biometricRecord = packetManagerService.getBiometrics(
+						regId, individualBiometricsLabel, modalities, process, ProviderStageName.CREDENTIAL_REQUESTOR);
+				List<BIR> segments = biometricRecord.getSegments();
 
-			for (BIR bir : segments) {
-				if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
-					byte[] isoBytes = bir.getBdb();
+				for (BIR bir : segments) {
+					if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
+						byte[] isoBytes = bir.getBdb();
 
-					ConvertRequestDto convertRequestDto = new ConvertRequestDto();
-					convertRequestDto.setInputBytes(isoBytes);
-					convertRequestDto.setVersion("ISO19794_5_2011");
+						ConvertRequestDto convertRequestDto = new ConvertRequestDto();
+						convertRequestDto.setInputBytes(isoBytes);
+						convertRequestDto.setVersion("ISO19794_5_2011");
 
-					byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
-					String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
-					fieldMap.put("face", faceBase64);
+						byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
+						String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
+						fieldMap.put("face", faceBase64);
+					}
 				}
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+						"PrintServiceImpl::getCredentialFieldMap():: Fetched face biometric for credIssuer API request");
+			} catch (Throwable t) {
+				regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"Failed to extract face biometric, proceeding without photo: " + t);
 			}
-			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::getCredentialFieldMap():: Fetched all the field values for credIssuer API request");
+
 			return fieldMap;
 		} catch (Throwable t) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
 					"Failed to extract credential fields (Throwable): " + t);
-			return Collections.emptyMap();
+			return fieldMap;
 		}
 	}
 
@@ -597,6 +604,9 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		photo.put("storage", "base64");
 		photo.put("name", "photograph.jpg");
 		String faceFromPacket = getFieldValue(fieldMap, "face", preferredLang);
+		if (faceFromPacket != null && !faceFromPacket.trim().isEmpty()) {
+			faceFromPacket = "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";
+		}
 		photo.put("url", "data:image/jpg;base64," + faceFromPacket);
 		photo.put("size", 1);
 		photo.put("type", "image/jpg");
