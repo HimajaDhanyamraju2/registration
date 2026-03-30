@@ -554,6 +554,20 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		String surName = getFieldValue(fieldMap, "fullName", preferredLang);
 		String givenName = getFieldValue(fieldMap, "givenName", preferredLang);
 
+		if (givenName == null || givenName.trim().isEmpty()) {
+			String fullName = getFieldValue(fieldMap, "fullName", preferredLang);
+			if (fullName != null && !fullName.trim().isEmpty()) {
+				String[] nameParts = fullName.trim().split("\\s+");
+				if (nameParts.length == 1) {
+					givenName = nameParts[0];
+					surName = nameParts[0];
+				} else {
+					givenName = nameParts[0];
+					surName = nameParts[nameParts.length - 1];
+				}
+			}
+		}
+
 		issuerInfo.put("org_code", issuerOrgCode);
 		issuerInfo.put("email", issuerEmail);
 		request.put("issuer_info", issuerInfo);
