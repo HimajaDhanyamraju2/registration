@@ -434,6 +434,14 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
 					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
+			// TODO: remove before production
+			try {
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"PrintServiceImpl::callCredIssuer():: request payload: " + mapper.writeValueAsString(request));
+			} catch (Exception logEx) {
+				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"PrintServiceImpl::callCredIssuer():: failed to serialise request for logging: " + logEx.getMessage());
+			}
 
 			HttpHeaders headers = new HttpHeaders();
 			headers.set("Authorization", credIssuerAuthHeader);
@@ -532,13 +540,23 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	}
 
 	private String convertToISODate(String date) {
-		try {
-			if (date == null) return null;
-			LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-			return localDate.atStartOfDay().toInstant(ZoneOffset.UTC).toString();
-		} catch (Exception e) {
-			return date;
+		if (date == null) return null;
+		List<DateTimeFormatter> formatters = Arrays.asList(
+				DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+				DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+				DateTimeFormatter.ofPattern("yyyy-MM-dd")
+		);
+		for (DateTimeFormatter fmt : formatters) {
+			try {
+				LocalDate localDate = LocalDate.parse(date, fmt);
+				return localDate.atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z");
+			} catch (Exception e) {
+				regProcLogger.error("convertToISODate: Exception in converting the date to ISO format: " + e.getMessage());
+				return date;
+			}
 		}
+		regProcLogger.error("convertToISODate: unrecognised date format: " + date);
+		return date;
 	}
 
 	private Map<String, Object> buildCredIssuerRequest(String regId, String identifier, Map<String, String> fieldMap) {
@@ -595,7 +613,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		credentialData.put("nrcNumber", docNumber);
 		credentialData.put("placeOfBirth", toUpper(getFieldValue(fieldMap, "city", preferredLang)));
 		credentialData.put("nationality", toUpper(nationality));
-		credentialData.put("dateOfIssue", LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC).toString());
+		credentialData.put("dateOfIssue", LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z"));
 		credentialData.put("dateOfBirth", convertToISODate(dobRaw));
 		credentialData.put("mrz_line_1", generateMrzLine1(toUpper(surName), toUpper(givenName)));
 		credentialData.put("mrz_line_2", generateMrzLine2(docNumber, toMrzDate(dobRaw), toMrzSex(sex), LocalDate.now().plusYears(10).format(DateTimeFormatter.ofPattern("yyMMdd"))));
