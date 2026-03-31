@@ -550,9 +550,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			try {
 				LocalDate localDate = LocalDate.parse(date, fmt);
 				return localDate.atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z");
-			} catch (Exception e) {
-				regProcLogger.error("convertToISODate: Exception in converting the date to ISO format: " + e.getMessage());
-				return date;
+			} catch (Exception ignored) {
 			}
 		}
 		regProcLogger.error("convertToISODate: unrecognised date format: " + date);
