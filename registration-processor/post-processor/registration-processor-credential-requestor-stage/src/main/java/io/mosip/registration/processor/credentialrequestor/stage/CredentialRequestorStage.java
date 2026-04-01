@@ -127,19 +127,19 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.registration.processor.encrypt:false}")
 	private boolean encrypt;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.url:https://teste-autenticacao.gov.st/api/credentials/issue/client/bulk}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.url:https://autenticacao.gov.st//api/credentials/issue/client/bulk}")
 	private String credIssuerUrl;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.auth:Bearer 70e09182bf0e4abf81a431d89b066bb1}")
 	private String credIssuerAuthHeader;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:DDA170E76BA1}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:1A1911ABDEC6}")
 	private String credIssuerTemplateId;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:CHAS-7EAA8DD9}")
 	private String issuerOrgCode;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-email:tochandru.engineer@gmail.com}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-email:issuer.stp@gov.st}")
 	private String issuerEmail;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mode:issue_and_notify}")
