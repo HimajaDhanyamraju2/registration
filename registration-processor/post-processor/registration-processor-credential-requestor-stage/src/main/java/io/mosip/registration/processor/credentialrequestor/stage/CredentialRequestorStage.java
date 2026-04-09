@@ -55,6 +55,8 @@ import org.springframework.core.env.Environment;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -449,15 +451,49 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			HttpEntity<Object> requestEntity = new HttpEntity<>(request, headers);
 			List<String> queryParamNames = Arrays.asList("credential_template", "mode_of_issuance");
 			List<Object> queryParamValues = Arrays.asList(credIssuerTemplateId, credIssuerModeOfIssuance);
-			restClientService.postApi(credIssuerUrl, MediaType.APPLICATION_JSON, null, queryParamNames, queryParamValues,
-					requestEntity, Object.class);
 
-			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::callCredIssuer():: credIssuer API called successfully");
+			int maxAttempts = 3;
+			for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+				try {
+					restClientService.postApi(credIssuerUrl, MediaType.APPLICATION_JSON, null, queryParamNames,
+							queryParamValues, requestEntity, Object.class);
+					regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+							"PrintServiceImpl::callCredIssuer():: credIssuer API called successfully on attempt " + attempt);
+					return;
+				} catch (HttpClientErrorException e) {
+					regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+							"PrintServiceImpl::callCredIssuer():: client error (no retry) - HTTP " + e.getStatusCode()
+							+ " | body: " + e.getResponseBodyAsString());
+					break;
+				} catch (Exception e) {
+					String errorDetail = extractCredIssuerError(e);
+					if (attempt < maxAttempts) {
+						regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+								"PrintServiceImpl::callCredIssuer():: attempt " + attempt + " of " + maxAttempts + " failed - " + errorDetail + ". Retrying...");
+						try { Thread.sleep(2000L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+					} else {
+						regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+								"PrintServiceImpl::callCredIssuer():: all " + maxAttempts + " attempts failed. Last error - " + errorDetail);
+					}
+				}
+			}
 		} catch (Exception e) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
-					regId, "CredIssuer call failed: " + e.getMessage() + ExceptionUtils.getStackTrace(e));
+					regId, "CredIssuer call failed unexpectedly: " + e.getClass().getSimpleName() + ": " + e.getMessage());
 		}
+	}
+
+	private String extractCredIssuerError(Exception e) {
+		Throwable cause = e.getCause();
+		if (cause instanceof HttpStatusCodeException) {
+			HttpStatusCodeException httpEx = (HttpStatusCodeException) cause;
+			return "HTTP " + httpEx.getStatusCode() + " | body: " + httpEx.getResponseBodyAsString();
+		}
+		if (e instanceof HttpStatusCodeException) {
+			HttpStatusCodeException httpEx = (HttpStatusCodeException) e;
+			return "HTTP " + httpEx.getStatusCode() + " | body: " + httpEx.getResponseBodyAsString();
+		}
+		return e.getClass().getSimpleName() + ": " + e.getMessage();
 	}
 
 	private Map<String, String> getCredentialFieldMap(String regId, String process) {
@@ -475,7 +511,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::getCredentialFieldMap():: Fetched demographic field values for credIssuer API request");
+					"PrintServiceImpl::getCredentialFieldMap():: Fetched demographic field values for credIssuer API request for the process: " + process);
 
 			try {
 				List<String> modalities = List.of("Face");
@@ -620,9 +656,6 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		photo.put("storage", "base64");
 		photo.put("name", "photograph.jpg");
 		String faceFromPacket = getFieldValue(fieldMap, "face", preferredLang);
-		if (faceFromPacket == null || faceFromPacket.trim().isEmpty()) {
-			faceFromPacket = "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";
-		}
 		photo.put("url", "data:image/jpg;base64," + faceFromPacket);
 		photo.put("size", 1);
 		photo.put("type", "image/jpg");
