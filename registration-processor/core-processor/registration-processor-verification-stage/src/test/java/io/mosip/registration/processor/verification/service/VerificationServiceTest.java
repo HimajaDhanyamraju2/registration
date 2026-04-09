@@ -213,6 +213,7 @@ public class VerificationServiceTest {
 		};
 
 		ReflectionTestUtils.setField(verificationService, "messageFormat", "text");
+		ReflectionTestUtils.setField(verificationService, "verificationStage", manualAdjudicationStage);
 		regprocLogger = (Logger) LoggerFactory.getLogger(VerificationServiceImpl.class);
 		listAppender = new ListAppender<>();
 		classLoader = getClass().getClassLoader();
