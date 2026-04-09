@@ -151,6 +151,9 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mrz-country-code:ZMB}")
 	private String mrzCountryCode;
 
+	@Value("${mosip.regproc.credentialrequestor.credissuer.infant-template-id:03F10C64E0B6}")
+	private String credIssuerInfantTemplateId;
+
 	/** Mosip router for APIs */
 	@Autowired
 	MosipRouter router;
@@ -432,7 +435,13 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					"PrintServiceImpl: Entered callCredIssuer method");
 
 			Map<String, String> fieldMap = getCredentialFieldMap(regId, process);
-			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
+
+			boolean isInfant = "CRVS_NEW".equalsIgnoreCase(process)
+					|| !fieldMap.containsKey("face") || fieldMap.get("face") == null || fieldMap.get("face").trim().isEmpty();
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+					"PrintServiceImpl::callCredIssuer():: isInfant=" + isInfant + " (process=" + process + ")");
+
+			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap, isInfant);
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
 					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
@@ -445,12 +454,13 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 						"PrintServiceImpl::callCredIssuer():: failed to serialise request for logging: " + logEx.getMessage());
 			}
 
+			String templateId = isInfant ? credIssuerInfantTemplateId : credIssuerTemplateId;
 			HttpHeaders headers = new HttpHeaders();
 			headers.set("Authorization", credIssuerAuthHeader);
 			headers.setContentType(MediaType.APPLICATION_JSON);
 			HttpEntity<Object> requestEntity = new HttpEntity<>(request, headers);
 			List<String> queryParamNames = Arrays.asList("credential_template", "mode_of_issuance");
-			List<Object> queryParamValues = Arrays.asList(credIssuerTemplateId, credIssuerModeOfIssuance);
+			List<Object> queryParamValues = Arrays.asList(templateId, credIssuerModeOfIssuance);
 
 			int maxAttempts = 3;
 			for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -593,7 +603,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		return date;
 	}
 
-	private Map<String, Object> buildCredIssuerRequest(String regId, String identifier, Map<String, String> fieldMap) {
+	private Map<String, Object> buildCredIssuerRequest(String regId, String identifier, Map<String, String> fieldMap, boolean isInfant) {
 		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
 				"PrintServiceImpl::buildCredIssuerRequest():: Building credIssuer API request");
 
@@ -630,7 +640,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		issuerInfo.put("org_code", issuerOrgCode);
 		issuerInfo.put("email", issuerEmail);
 		request.put("issuer_info", issuerInfo);
-		request.put("issuer_credential_template_id", credIssuerTemplateId);
+		request.put("issuer_credential_template_id", isInfant ? credIssuerInfantTemplateId : credIssuerTemplateId);
 
 		String dobRaw = getFieldValue(fieldMap, "dateOfBirth", preferredLang);
 		String sex = toUpper(getFieldValue(fieldMap, "gender", preferredLang));
@@ -652,16 +662,18 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		credentialData.put("mrz_line_1", generateMrzLine1(toUpper(surName), toUpper(givenName)));
 		credentialData.put("mrz_line_2", generateMrzLine2(docNumber, toMrzDate(dobRaw), toMrzSex(sex), LocalDate.now().plusYears(10).format(DateTimeFormatter.ofPattern("yyMMdd"))));
 
-		Map<String, Object> photo = new HashMap<>();
-		photo.put("storage", "base64");
-		photo.put("name", "photograph.jpg");
-		String faceFromPacket = getFieldValue(fieldMap, "face", preferredLang);
-		photo.put("url", "data:image/jpg;base64," + faceFromPacket);
-		photo.put("size", 1);
-		photo.put("type", "image/jpg");
-		photo.put("originalName", "photograph.jpg");
-		photo.put("hash", "");
-		credentialData.put("photo", Collections.singletonList(photo));
+		if (!isInfant) {
+			Map<String, Object> photo = new HashMap<>();
+			photo.put("storage", "base64");
+			photo.put("name", "photograph.jpg");
+			String faceFromPacket = getFieldValue(fieldMap, "face", preferredLang);
+			photo.put("url", "data:image/jpg;base64," + faceFromPacket);
+			photo.put("size", 1);
+			photo.put("type", "image/jpg");
+			photo.put("originalName", "photograph.jpg");
+			photo.put("hash", "");
+			credentialData.put("photo", Collections.singletonList(photo));
+		}
 
 		request.put("credential_data", Collections.singletonList(credentialData));
 		return request;
