@@ -151,7 +151,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mrz-country-code:ZMB}")
 	private String mrzCountryCode;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.infant-template-id:03F10C64E0B6}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.infant-template-id:F71C97156012}")
 	private String credIssuerInfantTemplateId;
 
 	/** Mosip router for APIs */
@@ -585,6 +585,27 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		}
 	}
 
+	private String calculateExpiryDate(String dobRaw, int yearsToAdd) {
+		try {
+			List<DateTimeFormatter> formatters = Arrays.asList(
+					DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+					DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+					DateTimeFormatter.ofPattern("yyyy-MM-dd")
+			);
+			for (DateTimeFormatter fmt : formatters) {
+				try {
+					LocalDate dob = LocalDate.parse(dobRaw, fmt);
+					return dob.plusYears(yearsToAdd).atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z");
+				} catch (Exception ignored) {
+				}
+			}
+			regProcLogger.error("calculateExpiryDate: unrecognised date format: " + dobRaw);
+		} catch (Exception e) {
+			regProcLogger.error("calculateExpiryDate: failed to calculate expiry from DOB: " + dobRaw + " - " + e.getMessage());
+		}
+		return null;
+	}
+
 	private String convertToISODate(String date) {
 		if (date == null) return null;
 		List<DateTimeFormatter> formatters = Arrays.asList(
@@ -661,6 +682,10 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		credentialData.put("dateOfBirth", convertToISODate(dobRaw));
 		credentialData.put("mrz_line_1", generateMrzLine1(toUpper(surName), toUpper(givenName)));
 		credentialData.put("mrz_line_2", generateMrzLine2(docNumber, toMrzDate(dobRaw), toMrzSex(sex), LocalDate.now().plusYears(10).format(DateTimeFormatter.ofPattern("yyMMdd"))));
+
+		if (isInfant) {
+			credentialData.put("expiryDate", calculateExpiryDate(dobRaw, 5));
+		}
 
 		if (!isInfant) {
 			Map<String, Object> photo = new HashMap<>();
