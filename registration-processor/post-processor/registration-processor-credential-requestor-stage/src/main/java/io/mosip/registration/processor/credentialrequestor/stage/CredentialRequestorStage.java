@@ -638,7 +638,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			String otherNationality = getFieldValue(fieldMap, "otherNationality", preferredLang);
 			nationality = (otherNationality != null && !otherNationality.isEmpty()) ? otherNationality : "Foreigner";
 		} else {
-			nationality = "Zambian";
+			nationality = "Zambia";
 		}
 
 		String surName = getFieldValue(fieldMap, "fullName", preferredLang);
