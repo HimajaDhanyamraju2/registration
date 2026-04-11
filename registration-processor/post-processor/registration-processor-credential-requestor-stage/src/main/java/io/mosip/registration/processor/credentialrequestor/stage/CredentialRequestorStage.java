@@ -447,8 +447,9 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
 			// TODO: remove before production
 			try {
+				String serialized = mapper.writeValueAsString(request);
 				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
-						"PrintServiceImpl::callCredIssuer():: request payload: " + mapper.writeValueAsString(request));
+						"PrintServiceImpl::callCredIssuer():: request payload size: " + serialized.length() + " bytes | payload: " + serialized);
 			} catch (Exception logEx) {
 				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
 						"PrintServiceImpl::callCredIssuer():: failed to serialise request for logging: " + logEx.getMessage());
@@ -541,6 +542,14 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 						convertRequestDto.setVersion("ISO19794_5_2011");
 
 						byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
+						String detectedFormat = "unknown";
+						if (imageBytes.length >= 4) {
+							if (imageBytes[0] == (byte)0xFF && imageBytes[1] == (byte)0xD8) detectedFormat = "JPEG";
+							else if (imageBytes[0] == (byte)0x89 && imageBytes[1] == 'P' && imageBytes[2] == 'N' && imageBytes[3] == 'G') detectedFormat = "PNG";
+							else if (imageBytes[0] == 'B' && imageBytes[1] == 'M') detectedFormat = "BMP";
+						}
+						regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+								"PrintServiceImpl::getCredentialFieldMap():: face image size: " + imageBytes.length + " bytes, format: " + detectedFormat);
 						String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
 						fieldMap.put("face", faceBase64);
 					}
