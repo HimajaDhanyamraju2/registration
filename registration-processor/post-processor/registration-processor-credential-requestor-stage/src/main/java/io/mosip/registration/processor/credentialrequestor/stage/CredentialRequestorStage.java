@@ -679,8 +679,8 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		Map<String, Object> credentialData = new HashMap<>();
 		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
 		credentialData.put("villageName", toUpper(getFieldValue(fieldMap, "city", preferredLang)));
-		credentialData.put("chief", toUpper(getFieldValue(fieldMap, "province", preferredLang)));
-		credentialData.put("district", toUpper(getFieldValue(fieldMap, "region", preferredLang)));
+		credentialData.put("chief", trimSuffix(toUpper(getFieldValue(fieldMap, "province", preferredLang)), "PROVINCE"));
+		credentialData.put("district", trimSuffix(toUpper(getFieldValue(fieldMap, "region", preferredLang)), "DISTRICT"));
 		credentialData.put("givenName", toUpper(givenName));
 		credentialData.put("surName", toUpper(surName));
 		credentialData.put("sex", sex);
@@ -715,6 +715,15 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 	private String toUpper(String value) {
 		return value == null ? "" : value.toUpperCase();
+	}
+
+	private String trimSuffix(String value, String suffix) {
+		if (value == null) return "";
+		String trimmed = value.trim();
+		if (trimmed.endsWith(" " + suffix)) {
+			return trimmed.substring(0, trimmed.length() - suffix.length()).trim();
+		}
+		return trimmed;
 	}
 
 	private String toMrzString(String input) {
