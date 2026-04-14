@@ -581,7 +581,7 @@ public class MessageSenderStage extends MosipVerticleAPIManager {
 				messageSenderDto.setSmsTemplateCode(env.getProperty(UIN_UPDATE+SMS));
 				messageSenderDto.setEmailTemplateCode(env.getProperty(UIN_UPDATE+EMAIL));
 				messageSenderDto.setIdType(IdType.UIN);
-				messageSenderDto.setSubjectCode(env.getProperty(UIN_UPDATE+SMS));
+				messageSenderDto.setSubjectCode(env.getProperty(UIN_UPDATE+SUB));
 			}
 			break;
 		case DUPLICATE_UIN:
