@@ -136,7 +136,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.auth:Bearer 83d6348e791046c59202240b15eda514}")
 	private String credIssuerAuthHeader;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:C9494D7E8BEC}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:E8F2466C4583}")
 	private String credIssuerTemplateId;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:cr}")
@@ -148,7 +148,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mode:issue_and_notify}")
 	private String credIssuerModeOfIssuance;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.mrz-country-code:ZMB}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.mrz-country-code:MWI}")
 	private String mrzCountryCode;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.infant-template-id:F71C97156012}")
@@ -515,8 +515,8 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			String gender = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.GENDER),
 					MappingJsonConstants.VALUE);
 
-			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "givenName", "surName", "region", "province", "city",
-				"dateOfBirth", gender, "email", "residenceStatus", "otherNationality"));
+			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "givenName", "surName", "dateOfBirth",
+				 gender, "email", "residenceStatus", "otherNationality"));
 
 			fieldMap = packetManagerService
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
@@ -647,7 +647,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			String otherNationality = getFieldValue(fieldMap, "otherNationality", preferredLang);
 			nationality = (otherNationality != null && !otherNationality.isEmpty()) ? otherNationality : "Foreigner";
 		} else {
-			nationality = "Zambia";
+			nationality = "Malawi";
 		}
 
 		String surName = getFieldValue(fieldMap, "fullName", preferredLang);
@@ -678,14 +678,10 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 		Map<String, Object> credentialData = new HashMap<>();
 		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
-		credentialData.put("villageName", toUpper(getFieldValue(fieldMap, "city", preferredLang)));
-		credentialData.put("chief", trimSuffix(toUpper(getFieldValue(fieldMap, "province", preferredLang)), "PROVINCE"));
-		credentialData.put("district", trimSuffix(toUpper(getFieldValue(fieldMap, "region", preferredLang)), "DISTRICT"));
-		credentialData.put("givenName", toUpper(givenName));
+		credentialData.put("otherName", toUpper(givenName));
 		credentialData.put("surName", toUpper(surName));
 		credentialData.put("sex", sex);
 		credentialData.put("nrcNumber", docNumber);
-		credentialData.put("placeOfBirth", toUpper(getFieldValue(fieldMap, "city", preferredLang)));
 		credentialData.put("nationality", toUpper(nationality));
 		credentialData.put("dateOfIssue", LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z"));
 		credentialData.put("dateOfBirth", convertToISODate(dobRaw));
