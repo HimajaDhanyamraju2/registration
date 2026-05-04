@@ -690,6 +690,8 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 		if (isInfant) {
 			credentialData.put("expiryDate", calculateExpiryDate(dobRaw, 5));
+		} else {
+			credentialData.put("expiryDate", "2036-05-05T00:00:00.000Z");
 		}
 
 		if (!isInfant) {
