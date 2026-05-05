@@ -151,7 +151,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mrz-country-code:MWI}")
 	private String mrzCountryCode;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.infant-template-id:F71C97156012}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.infant-template-id:F66A491E1D26}")
 	private String credIssuerInfantTemplateId;
 
 	/** Mosip router for APIs */
@@ -515,7 +515,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			String gender = JsonUtil.getJSONValue(JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.GENDER),
 					MappingJsonConstants.VALUE);
 
-			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "givenName", "surName", "dateOfBirth",
+			List<String> fields = new ArrayList<>(Arrays.asList("fullName", "givenName", "dateOfBirth",
 				 gender, "email", "residenceStatus", "otherNationality"));
 
 			fieldMap = packetManagerService
@@ -690,8 +690,6 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 		if (isInfant) {
 			credentialData.put("expiryDate", calculateExpiryDate(dobRaw, 5));
-		} else {
-			credentialData.put("expiryDate", "2036-05-05T00:00:00.000Z");
 		}
 
 		if (!isInfant) {
