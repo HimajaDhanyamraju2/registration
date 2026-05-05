@@ -136,7 +136,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.auth:Bearer 83d6348e791046c59202240b15eda514}")
 	private String credIssuerAuthHeader;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:E8F2466C4583}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:EB5B4EF2AD41}")
 	private String credIssuerTemplateId;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:cr}")
