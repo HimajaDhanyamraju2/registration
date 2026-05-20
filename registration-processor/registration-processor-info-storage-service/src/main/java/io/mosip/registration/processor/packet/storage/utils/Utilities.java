@@ -875,7 +875,7 @@ public class Utilities {
 		if (handleIdValue != null) {
 			IdRequestDTO1 idRequestDTO = new IdRequestDTO1();
 			idRequestDTO.setId((handleIdValue + "@" + MappingJsonConstants.HANDLE_ID_TYPE).toLowerCase(Locale.ROOT));
-			idRequestDTO.setIdType(MappingJsonConstants.HANDLE_ID_TYPE.toLowerCase());
+			idRequestDTO.setIdType("HANDLE");
 
 			IdResponseDTO1 idResponseDto = (IdResponseDTO1) restClientService.postApi(
 					ApiName.IDREPOGETIDBYUIN, "", "", idRequestDTO,
