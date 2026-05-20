@@ -430,7 +430,17 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
 
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::callCredIssuer():: credIssuer API request created with identifier: " + identifier);
+					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
+			
+			// TODO: remove before production
+			try {
+				String serialized = mapper.writeValueAsString(request);
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"PrintServiceImpl::callCredIssuer():: request payload size: " + serialized.length() + " bytes | payload: " + serialized);
+			} catch (Exception logEx) {
+				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"PrintServiceImpl::callCredIssuer():: failed to serialise request for logging: " + logEx.getMessage());
+			}
 
 			HttpHeaders headers = new HttpHeaders();
 			headers.set("Authorization", credIssuerAuthHeader);
@@ -450,6 +460,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	}
 
 	private Map<String, String> getCredentialFieldMap(String regId, String process) {
+		Map<String, String> fieldMap = new HashMap<>();
 		try {
 			JSONObject regProcessorIdentityJson = utilities.getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
 
@@ -463,39 +474,48 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 			List<String> fields = new ArrayList<>(Arrays.asList("firstName","surname","addressLine1","addressLine2",
 					"municipality","town",dob,gender,email,"height","countryOfCitizenship"));
 
-			Map<String, String> fieldMap = utilities.getPacketManagerService()
+			fieldMap = utilities.getPacketManagerService()
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
 
-			List<String> modalities = List.of("Face");
-			String individualBiometricsLabel = JsonUtil.getJSONValue(
-					JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.INDIVIDUAL_BIOMETRICS),
-					MappingJsonConstants.VALUE);
-			BiometricRecord biometricRecord = utilities.getPacketManagerService().getBiometrics(
-					regId, individualBiometricsLabel, modalities, process, ProviderStageName.CREDENTIAL_REQUESTOR);
-			List<BIR> segments = biometricRecord.getSegments();
-
-			for (BIR bir : segments) {
-				if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
-					byte[] isoBytes = bir.getBdb();
-
-					ConvertRequestDto convertRequestDto = new ConvertRequestDto();
-					convertRequestDto.setInputBytes(isoBytes);
-					convertRequestDto.setVersion("ISO19794_5_2011");
-
-					byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
-
-					String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
-
-					fieldMap.put("face", faceBase64);
-				}
-			}
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
 					"PrintServiceImpl::getCredentialFieldMap():: Fetched field values for credIssuer API request");
+
+			try {
+				List<String> modalities = List.of("Face");
+				String individualBiometricsLabel = JsonUtil.getJSONValue(
+						JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.INDIVIDUAL_BIOMETRICS),
+						MappingJsonConstants.VALUE);
+				BiometricRecord biometricRecord = utilities.getPacketManagerService().getBiometrics(
+						regId, individualBiometricsLabel, modalities, process, ProviderStageName.CREDENTIAL_REQUESTOR);
+				List<BIR> segments = biometricRecord.getSegments();
+
+				for (BIR bir : segments) {
+					if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
+						byte[] isoBytes = bir.getBdb();
+
+						ConvertRequestDto convertRequestDto = new ConvertRequestDto();
+						convertRequestDto.setInputBytes(isoBytes);
+						convertRequestDto.setVersion("ISO19794_5_2011");
+
+						byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
+
+						String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
+
+						fieldMap.put("face", faceBase64);
+					}
+				}
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+						"PrintServiceImpl::getCredentialFieldMap():: Fetched face biometric for credIssuer API request");
+			} catch (Throwable t) {
+				regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"Failed to extract face biometric, proceeding without photo: " + t);
+			}
+
 			return fieldMap;
 		} catch (Throwable t) {
 			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
 					"Failed to extract credential fields (Throwable): " + t);
-			return Collections.emptyMap();
+			return fieldMap;
 		}
 	}
 
