@@ -349,7 +349,7 @@ public class DemodedupeProcessorTest {
 		IdentityJsonValues identityJsonValues = new IdentityJsonValues();
 		identityJsonValues.setValue("fullName");
 		when(utility.getDefaultSource(any(), any())).thenReturn(source);
-		Mockito.when(utility.getUIn(anyString(), anyString(), any())).thenReturn("2345");
+		Mockito.when(utility.getUINByHandle(anyString(), anyString(), any())).thenReturn("2345");
 
 		JSONArray arr = new JSONArray();
 		arr.add("name");
@@ -384,7 +384,7 @@ public class DemodedupeProcessorTest {
 		IdentityJsonValues identityJsonValues = new IdentityJsonValues();
 		identityJsonValues.setValue("fullName");
 		when(utility.getDefaultSource(any(),any())).thenReturn(source);
-		Mockito.when(utility.getUIn(anyString(), anyString(), any())).thenReturn("2345");
+		Mockito.when(utility.getUINByHandle(anyString(), anyString(), any())).thenReturn("2345");
 		
 		Mockito.when(utility.retrieveIdrepoJson(any())).thenReturn(null);
 
@@ -414,7 +414,7 @@ public class DemodedupeProcessorTest {
 		IdentityJsonValues identityJsonValues = new IdentityJsonValues();
 		identityJsonValues.setValue("fullName");
 		when(utility.getDefaultSource(any(),any())).thenReturn(source);
-		Mockito.when(utility.getUIn(anyString(), anyString(), any())).thenReturn("2345");
+		Mockito.when(utility.getUINByHandle(anyString(), anyString(), any())).thenReturn("2345");
 
 		JSONArray arr = new JSONArray();
 		arr.add("name");
