@@ -258,7 +258,7 @@ public class Utilities {
 					"Utilities::getApplicantAge()::exit when applicantAge is not null");
 			return Integer.valueOf(applicantAge);
 		} else {
-			String uin = getUIn(id, process, stageName);
+			String uin = getUINByHandle(id, process, stageName);
 			JSONObject identityJSONOject = retrieveIdrepoJson(uin);
 			JSONObject regProcessorIdentityJson = getRegistrationProcessorMappingJson(MappingJsonConstants.IDENTITY);
 			String ageKey = JsonUtil

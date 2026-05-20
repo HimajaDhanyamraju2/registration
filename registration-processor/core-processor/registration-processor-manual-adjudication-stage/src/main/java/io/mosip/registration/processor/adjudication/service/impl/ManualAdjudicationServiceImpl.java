@@ -783,7 +783,7 @@ public class ManualAdjudicationServiceImpl implements ManualAdjudicationService 
 			referenceURLs.add(referenceURL);
 			if(registrationStatusDto.getRegistrationType().equalsIgnoreCase(RegistrationType.UPDATE.name())
 					|| registrationStatusDto.getRegistrationType().equalsIgnoreCase(RegistrationType.RES_UPDATE.name())) {
-				String uinField = utility.getUIn(id, registrationStatusDto.getRegistrationType(), ProviderStageName.MANUAL_ADJUDICATION);
+				String uinField = utility.getUINByHandle(id, registrationStatusDto.getRegistrationType(), ProviderStageName.MANUAL_ADJUDICATION);
 				ReferenceURL referenceURL1=new ReferenceURL();
 				referenceURL1.setSource(ID_REPO);
 				referenceURL1.setStatus(PROCESSED);
