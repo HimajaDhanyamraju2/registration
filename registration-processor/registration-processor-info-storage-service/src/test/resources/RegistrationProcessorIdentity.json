@@ -71,6 +71,9 @@
 		},
 		"introducerBiometrics": {
 			"value" : "introducerBiometrics"
+		},
+		"nationalId": {
+			"value" : "nationalId"
 		}
 	}
 }

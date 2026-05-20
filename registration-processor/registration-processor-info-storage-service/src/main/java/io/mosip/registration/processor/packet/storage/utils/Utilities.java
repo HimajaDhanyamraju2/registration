@@ -874,8 +874,8 @@ public class Utilities {
 			throws ApisResourceAccessException {
 		if (handleIdValue != null) {
 			IdRequestDTO1 idRequestDTO = new IdRequestDTO1();
-			idRequestDTO.setId(handleIdValue.concat("@handleIdType").toLowerCase(Locale.ROOT));
-			idRequestDTO.setIdType("handleIdType");
+			idRequestDTO.setId((handleIdValue + "@" + MappingJsonConstants.HANDLE_ID_TYPE).toLowerCase(Locale.ROOT));
+			idRequestDTO.setIdType(MappingJsonConstants.HANDLE_ID_TYPE.toLowerCase());
 
 			IdResponseDTO1 idResponseDto = (IdResponseDTO1) restClientService.postApi(
 					ApiName.IDREPOGETIDBYUIN, "", "", idRequestDTO,
