@@ -277,11 +277,23 @@ public class MessageNotificationServiceImpl
 				Map<String, Object> attributesLang=new HashMap<>(attributes);
 				setAttributes(id, process,lang, idType, attributesLang, regType, phoneNumber, emailId);
 				InputStream stream = templateGenerator.getTemplate(templateTypeCode, attributesLang, lang);
-
+				if (stream == null) {
+					regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
+							LoggerFileConstant.REGISTRATIONID.toString(), id,
+							"[TEMP] Email body template not found for code: " + templateTypeCode + ", lang: " + lang);
+					throw new TemplateNotFoundException(
+							PlatformErrorMessages.RPR_TEM_PROCESSING_FAILURE.getCode());
+				}
 				artifact = IOUtils.toString(stream, ENCODING);
 
 				InputStream subStream = templateGenerator.getTemplate(subjectCode, attributesLang, lang);
-
+				if (subStream == null) {
+					regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
+							LoggerFileConstant.REGISTRATIONID.toString(), id,
+							"[TEMP] Email subject template not found for code: " + subjectCode + ", lang: " + lang);
+					throw new TemplateNotFoundException(
+							PlatformErrorMessages.RPR_TEM_PROCESSING_FAILURE.getCode());
+				}
 				subject=IOUtils.toString(subStream, ENCODING);
 				if (emailId == null || emailId.length() == 0) {
 					throw new EmailIdNotFoundException(PlatformErrorMessages.RPR_EML_EMAILID_NOT_FOUND.getCode());

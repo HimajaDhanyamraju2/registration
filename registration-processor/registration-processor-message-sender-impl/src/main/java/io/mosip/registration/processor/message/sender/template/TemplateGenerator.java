@@ -104,6 +104,10 @@ public class TemplateGenerator {
 				InputStream stream = new ByteArrayInputStream(
 						template.getTemplates().iterator().next().getFileText().getBytes());
 				fileTextStream = getTemplateManager().merge(stream, attributes);
+			} else {
+				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), "",
+						"[TEMP] No template found for templateTypeCode: " + templateTypeCode + ", langCode: " + langCode
+								+ ", API response: " + responseWrapper);
 			}
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), "",
 					"TemplateGenerator::getTemplate()::exit");
