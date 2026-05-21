@@ -542,6 +542,10 @@ public class MessageNotificationServiceImpl
 		JSONObject demographicIdentity = null;
 			demographicIdentity = JsonUtil.objectMapperReadValue(idJsonString, JSONObject.class);
 
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+				"[TEMP] demographicIdentity keys: " + demographicIdentity.keySet()
+						+ " | full identity: " + demographicIdentity.toJSONString());
+
         if(mapperJsonKeys==null) {
         	String mapperJsonString = Utilities.getJson(utility.getConfigServerFileStorageURL(),
     				utility.getGetRegProcessorIdentityJson());
@@ -549,6 +553,8 @@ public class MessageNotificationServiceImpl
 		    mapperIdentity = JsonUtil.getJSONObject(mapperJson, utility.getGetRegProcessorDemographicIdentity());
 		   mapperJsonKeys = new ArrayList<>(mapperIdentity.keySet());
         }
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
+				"[TEMP] mapperJsonKeys: " + mapperJsonKeys);
 		for (String key : mapperJsonKeys) {
 			JSONObject jsonValue = JsonUtil.getJSONObject(mapperIdentity, key);
 			if (jsonValue.get(VALUE) != null && !jsonValue.get(VALUE).toString().isBlank()) {
@@ -559,7 +565,13 @@ public class MessageNotificationServiceImpl
 						JSONArray node = JsonUtil.getJSONArray(demographicIdentity, val);
 						JsonValue[] jsonValues = JsonUtil.mapJsonNodeToJavaObject(JsonValue.class, node);
 						for (int count = 0; count < jsonValues.length; count++) {
-							if(jsonValues[count].getLanguage().equalsIgnoreCase(lang)) {
+							if (jsonValues[count] == null || jsonValues[count].getLanguage() == null) {
+								regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(),
+										LoggerFileConstant.REGISTRATIONID.toString(), "",
+										"Skipping null/invalid JsonValue at index " + count + " for field: " + val + ", raw node: " + node.get(count));
+								continue;
+							}
+							if (jsonValues[count].getLanguage().equalsIgnoreCase(lang)) {
 								attribute.put(val + "_" + lang, jsonValues[count].getValue());
 							}
 						}

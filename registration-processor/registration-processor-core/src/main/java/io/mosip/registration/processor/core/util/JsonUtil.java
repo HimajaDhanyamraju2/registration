@@ -20,7 +20,9 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 
+import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.registration.processor.core.exception.util.PlatformErrorMessages;
+import io.mosip.registration.processor.core.logger.RegProcessorLogger;
 import io.mosip.registration.processor.core.packet.dto.demographicinfo.JsonValue;
 import io.mosip.registration.processor.core.util.exception.FieldNotFoundException;
 import io.mosip.registration.processor.core.util.exception.InstantanceCreationException;
@@ -38,6 +40,8 @@ public class JsonUtil {
 
 	/** The Constant VALUE. */
 	private static final String VALUE = "value";
+
+	private static final Logger logger = RegProcessorLogger.getLogger(JsonUtil.class);
 
 	private static ObjectMapper objectMapper = null;
 
@@ -158,11 +162,16 @@ public class JsonUtil {
 	 */
 	public static JSONObject getJSONObjectFromArray(JSONArray jsonObject, int key) {
 		Object object = jsonObject.get(key);
-		if(object instanceof LinkedHashMap) {
-			LinkedHashMap identity = (LinkedHashMap) jsonObject.get(key);
+		if (object instanceof LinkedHashMap) {
+			LinkedHashMap identity = (LinkedHashMap) object;
 			return identity != null ? new JSONObject(identity) : null;
-		}else {
-			return (JSONObject)object;
+		} else if (object instanceof JSONObject) {
+			return (JSONObject) object;
+		} else {
+			// String or other scalar — not a language/value object, skip it
+			logger.warn("JsonUtil", "getJSONObjectFromArray", "",
+					"Unexpected array element type at index " + key + ": " + (object == null ? "null" : object.getClass().getName()) + ", value: " + object);
+			return null;
 		}
 	}
 	/**
