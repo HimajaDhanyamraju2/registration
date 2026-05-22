@@ -670,6 +670,13 @@ public class MessageNotificationServiceImpl
 							org.json.JSONArray jsonArray = new org.json.JSONArray(value);
 							for (int i = 0; i < jsonArray.length(); i++) {
 								Object obj = jsonArray.get(i);
+								if (!(obj instanceof org.json.JSONObject)) {
+									regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(),
+											LoggerFileConstant.REGISTRATIONID.toString(), "",
+											"Skipping non-object array element for field: " + e.getKey()
+													+ ", index: " + i + ", value: " + obj);
+									continue;
+								}
 								JsonValue jsonValue = mapper.readValue(obj.toString(), JsonValue.class);
 								if(jsonValue.getLanguage().equalsIgnoreCase(lang)) {
 									attribute.putIfAbsent(e.getKey().toString() + "_" + lang, jsonValue.getValue());
