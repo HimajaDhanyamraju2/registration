@@ -145,6 +145,12 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mode:issue_and_notify}")
 	private String credIssuerModeOfIssuance;
 
+	@Value("${mosip.regproc.credentialrequestor.credissuer.max-retries:3}")
+	private int credIssuerMaxRetries;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.retry-delay-ms:2000}")
+	private long credIssuerRetryDelayMs;
+
 	@Value("${mosip.regproc.national-id.field-name:nationalId}")
 	private String nationalIdFieldName;
 
@@ -422,41 +428,58 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	}
 
 	private void callCredIssuer(String regId, String identifier, String process) {
+		Map<String, String> fieldMap = getCredentialFieldMap(regId, process);
+		Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
+
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+				"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
+
+		// TODO: remove before production
 		try {
-			// Get dynamic field values from packet
-			Map<String, String> fieldMap = getCredentialFieldMap(regId, process);
-
-			// Build request dynamically using extracted values
-			Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
-
-			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
-			
-			// TODO: remove before production
-			try {
-				String serialized = mapper.writeValueAsString(request);
-				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
-						"PrintServiceImpl::callCredIssuer():: request payload size: " + serialized.length() + " bytes | payload: " + serialized);
-			} catch (Exception logEx) {
-				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
-						"PrintServiceImpl::callCredIssuer():: failed to serialise request for logging: " + logEx.getMessage());
-			}
-
-			HttpHeaders headers = new HttpHeaders();
-			headers.set("Authorization", credIssuerAuthHeader);
-			headers.setContentType(MediaType.APPLICATION_JSON);
-			HttpEntity<Object> requestEntity = new HttpEntity<>(request, headers);
-			List<String> queryParamNames = Arrays.asList("credential_template", "mode_of_issuance");
-			List<Object> queryParamValues = Arrays.asList(credIssuerTemplateId, credIssuerModeOfIssuance);
-			restClientService.postApi(credIssuerUrl, MediaType.APPLICATION_JSON, null, queryParamNames, queryParamValues,
-					requestEntity, Object.class);
-
-			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
-					"PrintServiceImpl::callCredIssuer():: credIssuer API called successfully");
-		} catch (Exception e) {
-			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
-					regId, "CredIssuer call failed: " + e.getMessage() + ExceptionUtils.getStackTrace(e));
+			String serialized = mapper.writeValueAsString(request);
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+					"PrintServiceImpl::callCredIssuer():: request payload size: " + serialized.length() + " bytes | payload: " + serialized);
+		} catch (Exception logEx) {
+			regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+					"PrintServiceImpl::callCredIssuer():: failed to serialise request for logging: " + logEx.getMessage());
 		}
+
+		HttpHeaders headers = new HttpHeaders();
+		headers.set("Authorization", credIssuerAuthHeader);
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		HttpEntity<Object> requestEntity = new HttpEntity<>(request, headers);
+		List<String> queryParamNames = Arrays.asList("credential_template", "mode_of_issuance");
+		List<Object> queryParamValues = Arrays.asList(credIssuerTemplateId, credIssuerModeOfIssuance);
+
+		Exception lastException = null;
+		for (int attempt = 1; attempt <= credIssuerMaxRetries; attempt++) {
+			try {
+				restClientService.postApi(credIssuerUrl, MediaType.APPLICATION_JSON, null, queryParamNames,
+						queryParamValues, requestEntity, Object.class);
+				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"PrintServiceImpl::callCredIssuer():: credIssuer API called successfully on attempt " + attempt);
+				return;
+			} catch (Exception e) {
+				lastException = e;
+				regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"PrintServiceImpl::callCredIssuer():: attempt " + attempt + " of " + credIssuerMaxRetries
+								+ " failed: " + e.getMessage());
+				if (attempt < credIssuerMaxRetries) {
+					try {
+						Thread.sleep(credIssuerRetryDelayMs);
+					} catch (InterruptedException ie) {
+						Thread.currentThread().interrupt();
+						throw new RuntimeException("credIssuer retry interrupted", ie);
+					}
+				}
+			}
+		}
+		if (lastException != null) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+				"PrintServiceImpl::callCredIssuer():: all " + credIssuerMaxRetries + " attempts failed: "
+						+ lastException.getMessage() + ExceptionUtils.getStackTrace(lastException));
+		}
+		throw new RuntimeException("credIssuer call failed after " + credIssuerMaxRetries + " attempts", lastException);
 	}
 
 	private Map<String, String> getCredentialFieldMap(String regId, String process) {

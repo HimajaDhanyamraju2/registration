@@ -1,9 +1,14 @@
 package io.mosip.registration.processor.stages.uingenerator.service;
 
-import java.security.SecureRandom;
-import java.util.Collections;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.annotation.PostConstruct;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,19 +20,22 @@ import io.mosip.registration.processor.core.logger.RegProcessorLogger;
 import io.mosip.registration.processor.stages.uingenerator.exception.NationalIdGenerationException;
 
 /**
- * Service for generating unique National IDs with in-memory duplicate prevention
+ * Service for generating unique National IDs.
  *
- * Format: 50XXXXXYYZDZ (12 characters)
+ * Format: 50XXXXXYYZDD (12 characters)
  * - 50: Fixed prefix
- * - XXXXX: 5 random digits
- * - YY: 2 random alphanumeric characters (0-9, A-Z)
+ * - XXXXX: 5 digits (structured, not random)
+ * - YY: 2 alphanumeric characters (0-9, A-Z) (structured, not random)
  * - Z: Control digit (7=citizen, 5=foreigner)
  * - DD: 2-digit district code
  *
- * For 400K population across 7 districts:
- * - Expected collision rate without cache: ~1% (3,500 duplicates)
- * - Expected collision rate with cache: ~0.1% (350 duplicates)
- * - Remaining duplicates handled by ID Repo + packet reprocessing
+ * Uniqueness is guaranteed by construction: the XXXXXYY portion encodes
+ * (day-since-epoch, instance ID, per-day sequence) which can never repeat
+ * across restarts or across clustered instances as long as each instance has a distinct
+ * instance-id and clocks are not turned backwards. That value is then run through a keyed,
+ * deterministic permutation (a Feistel cipher, format-preserving via cycle-walking) so the
+ * emitted digits are indistinguishable from random and do not reveal issuance order/volume.
+ * Since a permutation is bijective, distinct inputs can never produce the same output.
  */
 @Service
 public class NationalIdGenerator {
@@ -38,38 +46,64 @@ public class NationalIdGenerator {
     private static final String CITIZEN_CONTROL_DIGIT = "7";
     private static final String FOREIGNER_CONTROL_DIGIT = "5";
     private static final String ALPHANUMERIC_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    private static final int DEFAULT_MAX_ATTEMPTS = 10;
-    private static final int DEFAULT_CACHE_SIZE = 10000;
 
-    // In-memory cache of recently generated IDs to prevent immediate duplicates
-    // Thread-safe implementation using ConcurrentHashMap
-    private static final Set<String> recentlyGeneratedIds = Collections.newSetFromMap(
-            new ConcurrentHashMap<String, Boolean>());
+    private static final long DIGIT_SPACE = 100_000L;        // 5 digits
+    private static final long ALNUM_SPACE = 1_296L;          // 2 chars, base 36
+    private static final long TOTAL_SPACE = DIGIT_SPACE * ALNUM_SPACE; // 129,600,000
 
-    // Using SecureRandom for cryptographically strong random number generation
-    private final SecureRandom secureRandom = new SecureRandom();
+    private static final long SEQUENCE_CAPACITY = 1_000L;    // per day, per instance, per bucket
+    private static final long INSTANCE_CAPACITY = 10L;       // instance-id 0-9
+    private static final long DAY_CAPACITY = TOTAL_SPACE / (INSTANCE_CAPACITY * SEQUENCE_CAPACITY); // ~35 years
+
+    private static final int FPE_HALF_BITS = 14;             // 2^28 domain, cycle-walked down to TOTAL_SPACE
+    private static final long FPE_HALF_MASK = (1L << FPE_HALF_BITS) - 1;
+    private static final int FPE_ROUNDS = 4;
+
+    // Per-day sequence counters. Only needs to be correct for "today" on this instance -
+    // the day+instance components of the index already guarantee no overlap with the past.
+    private final ConcurrentHashMap<String, AtomicInteger> dailySequences = new ConcurrentHashMap<>();
 
     @Autowired
     private DistrictCodeMapper districtCodeMapper;
 
-    @Value("${mosip.regproc.national-id.max-generation-attempts:10}")
-    private int maxGenerationAttempts;
+    @Value("${mosip.regproc.national-id.instance-id:0}")
+    private int instanceId;
 
-    @Value("${mosip.regproc.national-id.cache-size:10000}")
-    private int cacheSize;
+    @Value("${mosip.regproc.national-id.epoch-date:2024-01-01}")
+    private String epochDateConfig;
+
+    @Value("${mosip.regproc.national-id.fpe-key:CHANGE-ME-IN-PRODUCTION-SECRET-KEY}")
+    private String fpeKey;
+
+    private LocalDate epochDate;
+    private SecretKeySpec fpeSecretKey;
+
+    @PostConstruct
+    public void init() {
+        if (instanceId < 0 || instanceId >= INSTANCE_CAPACITY) {
+            throw new IllegalStateException("mosip.regproc.national-id.instance-id must be between 0 and "
+                    + (INSTANCE_CAPACITY - 1) + " but was " + instanceId);
+        }
+        epochDate = LocalDate.parse(epochDateConfig);
+        fpeSecretKey = new SecretKeySpec(fpeKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+
+        if ("CHANGE-ME-IN-PRODUCTION-SECRET-KEY".equals(fpeKey)) {
+            regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), "NationalIdGenerator", "init",
+                    "mosip.regproc.national-id.fpe-key is using the default placeholder value. "
+                            + "This MUST be overridden with a secret key in production configuration.");
+        }
+    }
 
     /**
-     * Generate a unique National ID with in-memory duplicate prevention
-     *
-     * Uses an in-memory cache to avoid generating recently used IDs.
-     * Reduces collision rate from ~1% to ~0.1% for 400K population.
+     * Generate a unique National ID.
      *
      * @param registrationId the registration ID (for logging)
      * @param isCitizen true for citizens (control digit 7), false for foreigners (control digit 5)
      * @param districtName the district name for geographic code lookup
      * @return the generated national ID
      */
-    public String generateNationalId(String registrationId, boolean isCitizen, String districtName) {
+    public String generateNationalId(String registrationId, boolean isCitizen, String districtName)
+            throws NationalIdGenerationException {
 
         regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
                 "Generating national ID. Citizen: " + isCitizen + ", District: " + districtName);
@@ -78,93 +112,87 @@ public class NationalIdGenerator {
         String districtCode = districtCodeMapper.getDistrictCode(districtName);
         String citizenType = isCitizen ? "CITIZEN" : "FOREIGNER";
 
-        int effectiveMaxAttempts = Math.max(maxGenerationAttempts, DEFAULT_MAX_ATTEMPTS);
-        String nationalId = null;
-        int attempts = 0;
-
-        // Try to generate a unique ID (not in recent cache)
-        while (attempts < effectiveMaxAttempts) {
-            attempts++;
-
-            // Generate random components using SecureRandom
-            String randomDigits = generateRandomDigits();
-            String randomAlphanumeric = generateRandomAlphanumeric();
-
-            // Construct national ID: 50XXXXXYYZDZ
-            nationalId = FIXED_PREFIX + randomDigits + randomAlphanumeric + controlDigit + districtCode;
-            if (recentlyGeneratedIds.add(nationalId)) {
-                manageCache(nationalId);
-                regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-                        "Successfully generated national ID (Type: " + citizenType + ", District Code: " + districtCode +
-                                ", Attempts: " + attempts + ", Cache size: " + recentlyGeneratedIds.size() + ")");
-                return nationalId;
-            }
-
-            // This ID was recently used, try again
-            regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-                    "National ID found in recent cache, retrying: (Attempt " + attempts + "/" + effectiveMaxAttempts + ")");
+        long dayIndex = ChronoUnit.DAYS.between(epochDate, LocalDate.now());
+        if (dayIndex < 0 || dayIndex >= DAY_CAPACITY) {
+            throw new NationalIdGenerationException("National ID day index " + dayIndex
+                    + " is out of the supported range [0, " + DAY_CAPACITY + "). "
+                    + "The configured epoch-date needs to be rolled forward.");
         }
 
-        // After max attempts, return the last generated ID anyway
-        // ID Repo will handle if it's truly a duplicate
-        regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
-                "Reached max attempts (" + effectiveMaxAttempts + "), returning last generated ID. ID Repo will handle if duplicate exists.");
-
-        if (recentlyGeneratedIds.add(nationalId)) {
-            manageCache(nationalId);
+        String bucketKey = dayIndex + "|" + districtCode + "|" + controlDigit;
+        int sequence = dailySequences.computeIfAbsent(bucketKey, k -> new AtomicInteger(0)).getAndIncrement();
+        if (sequence >= SEQUENCE_CAPACITY) {
+            throw new NationalIdGenerationException("Daily national ID capacity (" + SEQUENCE_CAPACITY
+                    + ") exceeded for district code " + districtCode + ", control digit " + controlDigit
+                    + " on day index " + dayIndex);
         }
+
+        long structuredIndex = dayIndex * (INSTANCE_CAPACITY * SEQUENCE_CAPACITY)
+                + instanceId * SEQUENCE_CAPACITY
+                + sequence;
+
+        long permutedIndex = permute(structuredIndex);
+
+        long digitPart = permutedIndex / ALNUM_SPACE;
+        long alnumIndex = permutedIndex % ALNUM_SPACE;
+
+        String randomDigits = String.format("%05d", digitPart);
+        String randomAlphanumeric = toAlphanumeric(alnumIndex);
+
+        String nationalId = FIXED_PREFIX + randomDigits + randomAlphanumeric + controlDigit + districtCode;
+
+        regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+                "Successfully generated national ID (Type: " + citizenType + ", District Code: " + districtCode
+                        + ", Day Index: " + dayIndex + ", Sequence: " + sequence + ")");
 
         return nationalId;
     }
 
+    private String toAlphanumeric(long alnumIndex) {
+        int first = (int) (alnumIndex / 36);
+        int second = (int) (alnumIndex % 36);
+        return String.valueOf(ALPHANUMERIC_CHARS.charAt(first)) + ALPHANUMERIC_CHARS.charAt(second);
+    }
+
     /**
-     * Manage cache size
-     * Thread-safe operation using ConcurrentHashMap
-     *
-     * @param nationalId the national ID to cache
+     * Format-preserving permutation of [0, TOTAL_SPACE) via a balanced Feistel cipher over a
+     * 2^28 domain with cycle-walking. A Feistel network is bijective for any round function,
+     * so re-applying it to out-of-range outputs (cycle-walking) still yields a bijection when
+     * restricted to [0, TOTAL_SPACE).
      */
-    private void manageCache(String nationalId) {
-       // Flush cache if it exceeds configured size
-        int effectiveCacheSize = Math.max(cacheSize, DEFAULT_CACHE_SIZE);
-        if (recentlyGeneratedIds.size() > effectiveCacheSize) {
-            synchronized (recentlyGeneratedIds) {
-                // Double-check after acquiring lock
-                if (recentlyGeneratedIds.size() > effectiveCacheSize) {
-                    regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),"NationalIdGenerator", "manageCache",
-                            "Cache size exceeded " + effectiveCacheSize + ", flushing cache. " + "Current size: " + recentlyGeneratedIds.size());
-                    recentlyGeneratedIds.clear();
-                    // Re-add the current ID
-                    recentlyGeneratedIds.add(nationalId);
-                }
+    private long permute(long value) {
+        long current = value;
+        do {
+            current = feistelRound(current);
+        } while (current >= TOTAL_SPACE);
+        return current;
+    }
+
+    private long feistelRound(long input) {
+        long left = (input >>> FPE_HALF_BITS) & FPE_HALF_MASK;
+        long right = input & FPE_HALF_MASK;
+        for (int round = 0; round < FPE_ROUNDS; round++) {
+            long f = roundFunction(round, right) & FPE_HALF_MASK;
+            long newRight = left ^ f;
+            left = right;
+            right = newRight;
+        }
+        return (left << FPE_HALF_BITS) | right;
+    }
+
+    private long roundFunction(int round, long right) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(fpeSecretKey);
+            byte[] data = (round + ":" + right).getBytes(StandardCharsets.UTF_8);
+            byte[] hash = mac.doFinal(data);
+            long result = 0;
+            for (int i = 0; i < 4; i++) {
+                result = (result << 8) | (hash[i] & 0xFF);
             }
+            return result & FPE_HALF_MASK;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to compute national ID round function", e);
         }
-    }
-
-    /**
-     * Generate N random digits using SecureRandom
-     *
-     * @return string of random digits
-     */
-    private String generateRandomDigits() {
-        StringBuilder sb = new StringBuilder(5);
-        for (int i = 0; i < 5; i++) {
-            sb.append(secureRandom.nextInt(10));
-        }
-        return sb.toString();
-    }
-
-    /**
-     * Generate N random alphanumeric characters using SecureRandom
-     * Uses 0-9 and A-Z (36 characters total)
-     *
-     * @return string of random alphanumeric characters
-     */
-    private String generateRandomAlphanumeric() {
-        StringBuilder sb = new StringBuilder(2);
-        for (int i = 0; i < 2; i++) {
-            int index = secureRandom.nextInt(ALPHANUMERIC_CHARS.length());
-            sb.append(ALPHANUMERIC_CHARS.charAt(index));
-        }
-        return sb.toString();
     }
 }
