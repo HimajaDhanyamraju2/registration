@@ -203,6 +203,7 @@ public class CredentialRequestorStageTest {
 
 		//ReflectionTestUtils.setField(stage, "port", "8080");
 		ReflectionTestUtils.setField(stage, "encrypt", false);
+		ReflectionTestUtils.setField(stage, "credIssuerMaxRetries", 3);
 		registrationStatusDto.setRegistrationId("45451454520011220230523070548");
 		registrationStatusDto.setRegistrationType("NEW");
 		registrationStatusDto.setWorkflowInstanceId("33e1fb7f-8202-41dc-82a1-49e821364eb2");
@@ -263,6 +264,7 @@ public class CredentialRequestorStageTest {
 		CredentialPartnersList partnersList = new CredentialPartnersList();
 		partnersList.setPartners(Lists.newArrayList(partner1, partner2));
 		when(credentialPartnerUtil.getAllCredentialPartners()).thenReturn(partnersList);
+		Mockito.when(credentialPartnerUtil.getCredentialPartners(any(), any(), any())).thenReturn(new ArrayList<>());
 
 
 

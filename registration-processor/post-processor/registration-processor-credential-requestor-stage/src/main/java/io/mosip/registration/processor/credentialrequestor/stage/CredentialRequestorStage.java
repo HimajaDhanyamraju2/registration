@@ -145,6 +145,9 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.regproc.credentialrequestor.credissuer.mode:issue_and_notify}")
 	private String credIssuerModeOfIssuance;
 
+	@Value("${mosip.regproc.credentialrequestor.credissuer.nid-validity-years:5}")
+	private int credIssuerValidityYears;
+
 	@Value("${mosip.regproc.credentialrequestor.credissuer.max-retries:3}")
 	private int credIssuerMaxRetries;
 
@@ -603,11 +606,13 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		credentialData.put("surnameLine1", getFieldValue(fieldMap, "surname", preferredLang));
 		credentialData.put("surnameLine2", "");
 		credentialData.put("firstName", getFieldValue(fieldMap, "firstName", preferredLang));
-		credentialData.put("sex", getFieldValue(fieldMap, "gender", preferredLang));
+		credentialData.put("sex", toGenderCode(getFieldValue(fieldMap, "gender", preferredLang)));
 		credentialData.put("height", getFieldValue(fieldMap, "height", preferredLang));
 		credentialData.put("NID", identifier != null ? identifier : regId);
 		credentialData.put("nationality", getFieldValue(fieldMap, "countryOfCitizenship", preferredLang));
-		credentialData.put("expiresAt", "2027-02-06T00:00:00.000Z");
+		String expiresAt = LocalDate.now().plusYears(credIssuerValidityYears)
+				.atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z");
+		credentialData.put("expiresAt", expiresAt);
 		credentialData.put("dateOfBirth", convertToISODate(getFieldValue(fieldMap, "dateOfBirth", preferredLang)));
 
 		Map<String, Object> photo = new HashMap<>();
@@ -625,9 +630,17 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		return request;
 	}
 
+	private String toGenderCode(String rawGender) {
+		if (rawGender == null || rawGender.isEmpty()) return "";
+		String upper = rawGender.trim().toUpperCase();
+		if (upper.startsWith("M")) return "M";
+		if (upper.startsWith("F")) return "F";
+		return rawGender;
+	}
+
 	/*
 	 * (non-Javadoc)
-	 * 
+	 *
 	 * @see io.vertx.core.AbstractVerticle#start()
 	 */
 	@Override
