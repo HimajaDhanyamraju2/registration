@@ -3,8 +3,6 @@ package io.mosip.registration.processor.stages.uingenerator.service;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.PostConstruct;
 import javax.crypto.Mac;
@@ -29,13 +27,19 @@ import io.mosip.registration.processor.stages.uingenerator.exception.NationalIdG
  * - Z: Control digit (7=citizen, 5=foreigner)
  * - DD: 2-digit district code
  *
- * Uniqueness is guaranteed by construction: the XXXXXYY portion encodes
- * (day-since-epoch, instance ID, per-day sequence) which can never repeat
- * across restarts or across clustered instances as long as each instance has a distinct
- * instance-id and clocks are not turned backwards. That value is then run through a keyed,
- * deterministic permutation (a Feistel cipher, format-preserving via cycle-walking) so the
- * emitted digits are indistinguishable from random and do not reveal issuance order/volume.
- * Since a permutation is bijective, distinct inputs can never produce the same output.
+ * Uniqueness is guaranteed by construction, not by checking history:
+ * - the per-day, per-district, per-control-digit sequence number comes from a single atomic
+ *   Postgres upsert (see {@link NationalIdSequenceDao}), so it can never repeat, regardless of
+ *   application restarts or how many instances are running concurrently - the database row is
+ *   the only source of truth, there is no in-memory counter to lose or coordinate.
+ * - the (day-since-epoch, sequence) pair is then run through a keyed, deterministic permutation
+ *   (a Feistel cipher, format-preserving via cycle-walking) so the emitted digits are
+ *   indistinguishable from random and do not reveal issuance order/volume. Since a permutation
+ *   is bijective, distinct inputs can never produce the same output.
+ *
+ * All instances MUST be configured with the exact same fpe-key: two different keys would each
+ * apply a different (individually valid) permutation, and nothing would then prevent two
+ * different sequence numbers from mapping to the same emitted digits across instances.
  */
 @Service
 public class NationalIdGenerator {
@@ -51,23 +55,19 @@ public class NationalIdGenerator {
     private static final long ALNUM_SPACE = 1_296L;          // 2 chars, base 36
     private static final long TOTAL_SPACE = DIGIT_SPACE * ALNUM_SPACE; // 129,600,000
 
-    private static final long SEQUENCE_CAPACITY = 1_000L;    // per day, per instance, per bucket
-    private static final long INSTANCE_CAPACITY = 10L;       // instance-id 0-9
-    private static final long DAY_CAPACITY = TOTAL_SPACE / (INSTANCE_CAPACITY * SEQUENCE_CAPACITY); // ~35 years
+    private static final long SEQUENCE_CAPACITY = 10_000L;   // per day, per district, per control-digit
+    private static final long DAY_CAPACITY = TOTAL_SPACE / SEQUENCE_CAPACITY; // 12,960 days (~35.5 years)
+    private static final double DAY_CAPACITY_WARNING_THRESHOLD = 0.8;
 
     private static final int FPE_HALF_BITS = 14;             // 2^28 domain, cycle-walked down to TOTAL_SPACE
     private static final long FPE_HALF_MASK = (1L << FPE_HALF_BITS) - 1;
     private static final int FPE_ROUNDS = 4;
 
-    // Per-day sequence counters. Only needs to be correct for "today" on this instance -
-    // the day+instance components of the index already guarantee no overlap with the past.
-    private final ConcurrentHashMap<String, AtomicInteger> dailySequences = new ConcurrentHashMap<>();
-
     @Autowired
     private DistrictCodeMapper districtCodeMapper;
 
-    @Value("${mosip.regproc.national-id.instance-id:0}")
-    private int instanceId;
+    @Autowired
+    private NationalIdSequenceDao nationalIdSequenceDao;
 
     @Value("${mosip.regproc.national-id.epoch-date:2024-01-01}")
     private String epochDateConfig;
@@ -80,17 +80,14 @@ public class NationalIdGenerator {
 
     @PostConstruct
     public void init() {
-        if (instanceId < 0 || instanceId >= INSTANCE_CAPACITY) {
-            throw new IllegalStateException("mosip.regproc.national-id.instance-id must be between 0 and "
-                    + (INSTANCE_CAPACITY - 1) + " but was " + instanceId);
-        }
         epochDate = LocalDate.parse(epochDateConfig);
         fpeSecretKey = new SecretKeySpec(fpeKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
 
         if ("CHANGE-ME-IN-PRODUCTION-SECRET-KEY".equals(fpeKey)) {
             regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), "NationalIdGenerator", "init",
                     "mosip.regproc.national-id.fpe-key is using the default placeholder value. "
-                            + "This MUST be overridden with a secret key in production configuration.");
+                            + "This MUST be overridden with a secret key in production configuration, "
+                            + "and MUST be identical across every running instance.");
         }
     }
 
@@ -118,20 +115,35 @@ public class NationalIdGenerator {
                     + " is out of the supported range [0, " + DAY_CAPACITY + "). "
                     + "The configured epoch-date needs to be rolled forward.");
         }
+        if (dayIndex >= DAY_CAPACITY * DAY_CAPACITY_WARNING_THRESHOLD) {
+            regProcLogger.warn(LoggerFileConstant.SESSIONID.toString(), "NationalIdGenerator", "generateNationalId",
+                    "National ID day index " + dayIndex + " has passed " + (DAY_CAPACITY_WARNING_THRESHOLD * 100)
+                            + "% of its capacity (" + DAY_CAPACITY + "). Plan to roll the epoch-date forward.");
+        }
 
-        String bucketKey = dayIndex + "|" + districtCode + "|" + controlDigit;
-        int sequence = dailySequences.computeIfAbsent(bucketKey, k -> new AtomicInteger(0)).getAndIncrement();
+        // The database row is the single source of truth for this counter - safe across
+        // restarts and across any number of concurrently running instances. If this fails,
+        // no id is fabricated: the exception propagates and no national id is returned.
+        int sequence;
+        try {
+            sequence = nationalIdSequenceDao.nextSequence(dayIndex, districtCode, controlDigit);
+        } catch (RuntimeException e) {
+            throw new NationalIdGenerationException("Failed to allocate a national id sequence number for district code "
+                    + districtCode + ", control digit " + controlDigit + " on day index " + dayIndex, e);
+        }
         if (sequence >= SEQUENCE_CAPACITY) {
             throw new NationalIdGenerationException("Daily national ID capacity (" + SEQUENCE_CAPACITY
                     + ") exceeded for district code " + districtCode + ", control digit " + controlDigit
                     + " on day index " + dayIndex);
         }
 
-        long structuredIndex = dayIndex * (INSTANCE_CAPACITY * SEQUENCE_CAPACITY)
-                + instanceId * SEQUENCE_CAPACITY
-                + sequence;
+        long structuredIndex = dayIndex * SEQUENCE_CAPACITY + sequence;
 
-        long permutedIndex = permute(structuredIndex);
+        // Tweak the permutation by district+control-digit so buckets with the same day/sequence
+        // (e.g. the first registration of the day in every district) don't look alike - only the
+        // sequence's own bucket shares a permutation, keeping the bijection (and uniqueness) intact.
+        String tweak = districtCode + ":" + controlDigit;
+        long permutedIndex = permute(structuredIndex, tweak);
 
         long digitPart = permutedIndex / ALNUM_SPACE;
         long alnumIndex = permutedIndex % ALNUM_SPACE;
@@ -160,19 +172,19 @@ public class NationalIdGenerator {
      * so re-applying it to out-of-range outputs (cycle-walking) still yields a bijection when
      * restricted to [0, TOTAL_SPACE).
      */
-    private long permute(long value) {
+    private long permute(long value, String tweak) {
         long current = value;
         do {
-            current = feistelRound(current);
+            current = feistelRound(current, tweak);
         } while (current >= TOTAL_SPACE);
         return current;
     }
 
-    private long feistelRound(long input) {
+    private long feistelRound(long input, String tweak) {
         long left = (input >>> FPE_HALF_BITS) & FPE_HALF_MASK;
         long right = input & FPE_HALF_MASK;
         for (int round = 0; round < FPE_ROUNDS; round++) {
-            long f = roundFunction(round, right) & FPE_HALF_MASK;
+            long f = roundFunction(round, right, tweak) & FPE_HALF_MASK;
             long newRight = left ^ f;
             left = right;
             right = newRight;
@@ -180,11 +192,11 @@ public class NationalIdGenerator {
         return (left << FPE_HALF_BITS) | right;
     }
 
-    private long roundFunction(int round, long right) {
+    private long roundFunction(int round, long right, String tweak) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(fpeSecretKey);
-            byte[] data = (round + ":" + right).getBytes(StandardCharsets.UTF_8);
+            byte[] data = (tweak + ":" + round + ":" + right).getBytes(StandardCharsets.UTF_8);
             byte[] hash = mac.doFinal(data);
             long result = 0;
             for (int i = 0; i < 4; i++) {
