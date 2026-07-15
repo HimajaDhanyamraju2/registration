@@ -2,6 +2,8 @@ package io.mosip.registration.processor.stages.cmdvalidator;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -96,6 +98,16 @@ public class DeviceValidator {
 	// not a configurable pattern, since different device vendors may vary sub-second precision/offset formatting
 	// while still being valid ISO-8601.
 	private static final DateTimeFormatter DIGITAL_ID_TIMESTAMP_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+
+	// packetCreationDate (and other server-side timestamps we compare against) are always UTC, but the
+	// digitalId dateTime may carry a non-zero device-local offset (e.g. +03:00). Parsing straight into
+	// LocalDateTime would silently drop that offset instead of converting it, making the comparison wrong
+	// by exactly the offset amount. Convert to the UTC-equivalent instant explicitly instead.
+	private static LocalDateTime parseDigitalIdTimestampAsUtc(String dateTime) {
+		return OffsetDateTime.parse(dateTime, DIGITAL_ID_TIMESTAMP_FORMATTER)
+				.withOffsetSameInstant(ZoneOffset.UTC)
+				.toLocalDateTime();
+	}
 
 	@Value("#{T(java.util.Arrays).asList('${mosip.regproc.common.before-cbeff-others-attibute.reg-client-versions:}')}")
 	private List<String> regClientVersionsBeforeCbeffOthersAttritube;
@@ -285,7 +297,7 @@ public class DeviceValidator {
 			HotlistRequestResponseDTO hotListResponse=mapper.readValue(mapper.writeValueAsString(responseWrapper.getResponse()),
 					HotlistRequestResponseDTO.class);
 
-		LocalDateTime payloadTime = LocalDateTime.parse(digitalIdTimestamp, DIGITAL_ID_TIMESTAMP_FORMATTER);
+		LocalDateTime payloadTime = parseDigitalIdTimestampAsUtc(digitalIdTimestamp);
 		if(hotListResponse.getExpiryTimestamp()!=null) {
 
 		if(hotListResponse.getStatus().equalsIgnoreCase("BLOCKED") &&
@@ -316,8 +328,7 @@ public class DeviceValidator {
 		DateTimeFormatter packetCreationTimestampFormatter = DateTimeFormatter.ofPattern(env.getProperty(DATETIME_PATTERN));
 		LocalDateTime packetCreationDateTime = LocalDateTime
 				.parse(packetCreationDate, packetCreationTimestampFormatter);
-		LocalDateTime timestamp = LocalDateTime
-				.parse(dateTime, DIGITAL_ID_TIMESTAMP_FORMATTER);
+		LocalDateTime timestamp = parseDigitalIdTimestampAsUtc(dateTime);
 
 			if (timestamp.isAfter(packetCreationDateTime)|| timestamp.isBefore(
 							packetCreationDateTime.minus(allowedDigitalIdTimestampVariation, ChronoUnit.MINUTES))) {
@@ -336,8 +347,7 @@ public class DeviceValidator {
 			DateTimeFormatter packetCreationTimestampFormatter = DateTimeFormatter.ofPattern(env.getProperty(DATETIME_PATTERN));
 			LocalDateTime packetCreationDateTime = LocalDateTime
 					.parse(correctionPacketCreationTime, packetCreationTimestampFormatter);
-			LocalDateTime timestamp = LocalDateTime
-					.parse(dateTime, DIGITAL_ID_TIMESTAMP_FORMATTER);
+			LocalDateTime timestamp = parseDigitalIdTimestampAsUtc(dateTime);
 
 			return (timestamp.isAfter(packetCreationDateTime)|| timestamp.isBefore(
 					packetCreationDateTime.minus(allowedDigitalIdTimestampVariation, ChronoUnit.MINUTES)));

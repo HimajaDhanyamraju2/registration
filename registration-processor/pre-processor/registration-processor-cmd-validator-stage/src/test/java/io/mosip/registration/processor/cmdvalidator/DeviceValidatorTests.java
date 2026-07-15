@@ -82,7 +82,6 @@ public class DeviceValidatorTests {
 		regOsi.setRegClientVersion(regClientVersion);
 		ReflectionTestUtils.setField(deviceValidator, "allowedDigitalIdTimestampVariation", 30);
 		ReflectionTestUtils.setField(deviceValidator, "disableTrustValidation", true);
-		ReflectionTestUtils.setField(deviceValidator, "digitalIdTimestampFormat", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 		ReflectionTestUtils.setField(deviceValidator, "regClientVersionsBeforeCbeffOthersAttritube",
 			new ArrayList<String>());
 
