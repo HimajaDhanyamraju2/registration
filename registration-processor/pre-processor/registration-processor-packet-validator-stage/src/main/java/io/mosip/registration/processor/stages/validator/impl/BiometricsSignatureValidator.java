@@ -73,8 +73,6 @@ public class BiometricsSignatureValidator {
 		}
 
 		List<BIR> birs = biometricRecord.getSegments();
-		// TEMPORARY DIAGNOSTIC/WORKAROUND (padding-fallback + full-record logging) - remove once vendor MDS padding issue is resolved
-		boolean anyFailure = false;
 		for (BIR bir : birs) {
 			HashMap<String, String> othersInfo = bir.getOthers();
 			if (othersInfo == null) {
@@ -95,76 +93,10 @@ public class BiometricsSignatureValidator {
 				continue;
 			}
 
-			String bioSubTypeTag = getBioSubTypeForLogging(othersInfo);
-
-			String primaryToken = BiometricsSignatureHelper.extractJWTToken(bir);
-			boolean primaryValid = isSignatureValid(id, primaryToken, bioSubTypeTag, "PRIMARY_UNPADDED");
-
-			if (primaryValid) {
-				regProcLogger.info(LoggerFileConstant.REGISTRATIONID.toString(), id, "BIOMETRIC_SIGNATURE_CHECK",
-						"PASS (primary/unpadded) for bioSubType=" + bioSubTypeTag);
-				continue;
-			}
-
-			regProcLogger.error(LoggerFileConstant.REGISTRATIONID.toString(), id, "BIOMETRIC_SIGNATURE_CHECK",
-					"FAIL (primary/unpadded) for bioSubType=" + bioSubTypeTag + " - trying padded fallback");
-
-			String paddedToken = extractJWTTokenPadded(bir);
-			boolean paddedValid = isSignatureValid(id, paddedToken, bioSubTypeTag, "PADDED_FALLBACK");
-
-			if (paddedValid) {
-				regProcLogger.info(LoggerFileConstant.REGISTRATIONID.toString(), id, "BIOMETRIC_SIGNATURE_CHECK",
-						"PASS (padded fallback) for bioSubType=" + bioSubTypeTag);
-				continue;
-			}
-
-			regProcLogger.error(LoggerFileConstant.REGISTRATIONID.toString(), id, "BIOMETRIC_SIGNATURE_CHECK",
-					"FAIL (both primary and padded) for bioSubType=" + bioSubTypeTag);
-			anyFailure = true;
+			String token = BiometricsSignatureHelper.extractJWTToken(bir);
+			validateJWTToken(id, token);
 		}
 
-		if (anyFailure) {
-			throw new BiometricSignatureValidationException(
-					StatusUtil.BIOMETRICS_SIGNATURE_VALIDATION_FAILURE.getCode(),
-					StatusUtil.BIOMETRICS_SIGNATURE_VALIDATION_FAILURE.getMessage());
-		}
-		// END TEMPORARY DIAGNOSTIC/WORKAROUND
-	}
-
-	private String getBioSubTypeForLogging(Map<String, String> othersInfo) {
-		try {
-			String payloadTemplate = othersInfo.get("PAYLOAD");
-			if (payloadTemplate != null) {
-				org.json.JSONObject json = new org.json.JSONObject(payloadTemplate);
-				if (json.has("bioSubType")) {
-					return json.getString("bioSubType");
-				}
-			}
-		} catch (Exception e) {
-			// best-effort only, ignore
-		}
-		return "UNKNOWN";
-	}
-
-	// TEMPORARY WORKAROUND for vendor MDS devices that encode bioValue using STANDARD (padded) base64url
-	// instead of the JWS-compliant unpadded convention. Mirrors BiometricsSignatureHelper.extractJWTToken()
-	// but re-encodes bir.getBdb() WITH padding to reproduce what such devices actually signed.
-	private String extractJWTTokenPadded(BIR bir) throws BiometricSignatureValidationException {
-		String constructedJWTToken = null;
-		Map<String, String> othersInfo = bir.getOthers();
-		if (othersInfo == null || othersInfo.isEmpty()) {
-			throw new BiometricSignatureValidationException("Others value is null / empty inside BIR");
-		}
-		String sb = new String(bir.getSb(), java.nio.charset.StandardCharsets.UTF_8);
-		String bdbPadded = java.util.Base64.getUrlEncoder().encodeToString(bir.getBdb());
-		for (Map.Entry<String, String> entry : othersInfo.entrySet()) {
-			if (entry.getKey().equals("PAYLOAD")) {
-				String value = entry.getValue().replace("<bioValue>", bdbPadded);
-				String encodedPayloadValue = io.mosip.kernel.core.util.CryptoUtil.encodeToURLSafeBase64(value.getBytes());
-				constructedJWTToken = sb.replace("..", "." + encodedPayloadValue + ".");
-			}
-		}
-		return constructedJWTToken;
 	}
 
 	private String getRegClientVersionFromMetaInfo(String id, String process, Map<String, String> metaInfoMap)
@@ -188,7 +120,7 @@ public class BiometricsSignatureValidator {
 		return version;
 	}
 
-	private boolean isSignatureValid(String id, String token, String bioSubTypeTag, String attemptTag)
+	private void validateJWTToken(String id, String token)
 			throws JsonParseException, JsonMappingException, JsonProcessingException, IOException, JSONException,
 			BiometricSignatureValidationException, ApisResourceAccessException, io.mosip.kernel.core.util.exception.JsonProcessingException {
 		JWTSignatureVerifyRequestDto jwtSignatureVerifyRequestDto = new JWTSignatureVerifyRequestDto();
@@ -218,12 +150,12 @@ public class BiometricsSignatureValidator {
 
 			if (!jwtResponse.isSignatureValid()) {
 				regProcLogger.error(LoggerFileConstant.REGISTRATIONID.toString(), id,
-						"[" + attemptTag + " bioSubType=" + bioSubTypeTag + "] Request -> "
-								+ JsonUtils.javaObjectToJsonString(request)
+						"Request -> " + JsonUtils.javaObjectToJsonString(request)
 						," Response -> " + JsonUtils.javaObjectToJsonString(responseWrapper));
-				return false;
+				throw new BiometricSignatureValidationException(
+						StatusUtil.BIOMETRICS_SIGNATURE_VALIDATION_FAILURE.getCode(),
+						StatusUtil.BIOMETRICS_SIGNATURE_VALIDATION_FAILURE.getMessage());
 			}
-			return true;
 		} else {
 			throw new BiometricSignatureValidationException(responseWrapper.getErrors().get(0).getErrorCode(),
 					responseWrapper.getErrors().get(0).getMessage());
