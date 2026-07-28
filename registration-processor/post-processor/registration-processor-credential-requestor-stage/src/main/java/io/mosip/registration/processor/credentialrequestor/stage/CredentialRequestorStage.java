@@ -599,17 +599,17 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 		Map<String, Object> credentialData = new HashMap<>();
 		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
-		credentialData.put("addressLine1", getFieldValue(fieldMap, "addressLine1", preferredLang));
-		credentialData.put("addressLine2", getFieldValue(fieldMap, "addressLine2", preferredLang));
-		credentialData.put("addressLine3", getFieldValue(fieldMap, "municipality", preferredLang));
-		credentialData.put("addressLine4", getFieldValue(fieldMap, "town", preferredLang));
-		credentialData.put("surnameLine1", getFieldValue(fieldMap, "surname", preferredLang));
+		credentialData.put("addressLine1", toUpper(getFieldValue(fieldMap, "addressLine1", preferredLang)));
+		credentialData.put("addressLine2", toUpper(getFieldValue(fieldMap, "addressLine2", preferredLang)));
+		credentialData.put("addressLine3", toUpper(getFieldValue(fieldMap, "municipality", preferredLang)));
+		credentialData.put("addressLine4", toUpper(getFieldValue(fieldMap, "town", preferredLang)));
+		credentialData.put("surnameLine1", toUpper(getFieldValue(fieldMap, "surname", preferredLang)));
 		credentialData.put("surnameLine2", "");
-		credentialData.put("firstName", getFieldValue(fieldMap, "firstName", preferredLang));
+		credentialData.put("firstName", toUpper(getFieldValue(fieldMap, "firstName", preferredLang)));
 		credentialData.put("sex", toGenderCode(getFieldValue(fieldMap, "gender", preferredLang)));
 		credentialData.put("height", getFieldValue(fieldMap, "height", preferredLang));
 		credentialData.put("NID", identifier != null ? identifier : regId);
-		credentialData.put("nationality", getFieldValue(fieldMap, "countryOfCitizenship", preferredLang));
+		credentialData.put("nationality", toUpper(getFieldValue(fieldMap, "countryOfCitizenship", preferredLang)));
 		String expiresAt = LocalDate.now().plusYears(credIssuerValidityYears)
 				.atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z");
 		credentialData.put("expiresAt", expiresAt);
@@ -628,6 +628,10 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 		request.put("credential_data", Collections.singletonList(credentialData));
 		return request;
+	}
+
+	private String toUpper(String value) {
+		return value == null ? null : value.toUpperCase();
 	}
 
 	private String toGenderCode(String rawGender) {
