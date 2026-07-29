@@ -55,9 +55,6 @@ public class SigaService {
 	@Value("${mosip.regproc.demo.dedupe.siga.retry-delay-ms:2000}")
 	private long sigaRetryDelayMs;
 
-	@Value("${mosip.regproc.national-id.district-field:district}")
-	private String districtFieldName;
-
 	@Value("${mosip.regproc.national-id.preferred-language:por}")
 	private String preferredLanguage;
 
@@ -68,11 +65,11 @@ public class SigaService {
 	private RegistrationProcessorRestClientService<Object> restClientService;
 
 	/**
-	 * Looks up the applicant in SIGA by first/last name, gender, date of birth and place of
-	 * birth (district). Returns true when SIGA reports a matching record (or when the SIGA
-	 * check is disabled), false when SIGA has no matching record (HTTP 404 or empty
-	 * {@code data}) - callers are expected to pause the packet for manual verification in
-	 * that case rather than proceed with the local dedupe check.
+	 * Looks up the applicant in SIGA by first/last name, gender and date of birth. Returns
+	 * true when SIGA reports a matching record (or when the SIGA check is disabled), false
+	 * when SIGA has no matching record (HTTP 404 or empty {@code data}) - callers are
+	 * expected to pause the packet for manual verification in that case rather than proceed
+	 * with the local dedupe check.
 	 *
 	 * @throws ApisResourceAccessException if the SIGA API keeps failing after retries are
 	 *             exhausted, so the caller can route the packet for automatic reprocessing
@@ -92,8 +89,7 @@ public class SigaService {
 				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.DOB),
 				MappingJsonConstants.VALUE);
 
-		List<String> fields = Arrays.asList(FIRST_NAME_FIELD, SURNAME_FIELD, genderFieldName, dobFieldName,
-				districtFieldName);
+		List<String> fields = Arrays.asList(FIRST_NAME_FIELD, SURNAME_FIELD, genderFieldName, dobFieldName);
 		Map<String, String> fieldMap = utilities.getPacketManagerService().getFields(registrationId, fields, process,
 				ProviderStageName.DEMO_DEDUPE);
 
@@ -101,9 +97,9 @@ public class SigaService {
 		String lastName = extractLanguageValue(fieldMap.get(SURNAME_FIELD));
 		String gender = toSigaGender(extractLanguageValue(fieldMap.get(genderFieldName)));
 		String birthDate = toSigaDate(extractLanguageValue(fieldMap.get(dobFieldName)));
-		String placeOfBirth = extractLanguageValue(fieldMap.get(districtFieldName));
 
-		return callSigaWithRetry(registrationId, firstName, lastName, gender, birthDate, placeOfBirth);
+		// placeOfBirth is optional on the SIGA side - not sourced from the packet.
+		return callSigaWithRetry(registrationId, firstName, lastName, gender, birthDate, "");
 	}
 
 	private boolean callSigaWithRetry(String registrationId, String firstName, String lastName, String gender,

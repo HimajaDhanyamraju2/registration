@@ -72,7 +72,6 @@ public class SigaServiceTest {
 		ReflectionTestUtils.setField(sigaService, "sigaVerificationEnabled", true);
 		ReflectionTestUtils.setField(sigaService, "sigaMaxRetries", 3);
 		ReflectionTestUtils.setField(sigaService, "sigaRetryDelayMs", 1L);
-		ReflectionTestUtils.setField(sigaService, "districtFieldName", "district");
 		ReflectionTestUtils.setField(sigaService, "preferredLanguage", "por");
 		ReflectionTestUtils.setField(sigaService, "sigaUrl", "https://leginon.dgrn.gov.st/api/nip");
 	}
@@ -100,7 +99,7 @@ public class SigaServiceTest {
 
 	@Test
 	public void testRecordFound() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
 				.thenReturn(sigaResponseWithRecord());
 
@@ -111,7 +110,7 @@ public class SigaServiceTest {
 
 	@Test
 	public void testRecordNotFoundEmptyData() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
 		SigaResponseDto emptyResponse = new SigaResponseDto();
 		emptyResponse.setData(new ArrayList<>());
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
@@ -124,7 +123,7 @@ public class SigaServiceTest {
 
 	@Test
 	public void testRecordNotFound404DoesNotRetry() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
 		HttpStatusCodeException notFoundCause = mock(HttpStatusCodeException.class);
 		when(notFoundCause.getStatusCode()).thenReturn(HttpStatus.NOT_FOUND);
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
@@ -138,7 +137,7 @@ public class SigaServiceTest {
 
 	@Test
 	public void testTransientFailureRetriesThenSucceeds() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
 				.thenThrow(new ApisResourceAccessException("timeout")).thenReturn(sigaResponseWithRecord());
 
@@ -150,7 +149,7 @@ public class SigaServiceTest {
 
 	@Test(expected = ApisResourceAccessException.class)
 	public void testTransientFailureExhaustsRetriesAndThrows() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
 				.thenThrow(new ApisResourceAccessException("down"));
 
@@ -164,7 +163,7 @@ public class SigaServiceTest {
 	 */
 	@Test
 	public void testUnexpectedExceptionIsWrappedAndNotRetried() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
 				.thenThrow(new ClassCastException("unexpected response shape"));
 
@@ -180,7 +179,7 @@ public class SigaServiceTest {
 	@Test
 	@SuppressWarnings("unchecked")
 	public void testGenderNormalizedToPortuguese() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "F", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "F", "1996-02-22");
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
 				.thenReturn(sigaResponseWithRecord());
 
@@ -196,7 +195,7 @@ public class SigaServiceTest {
 	@SuppressWarnings("unchecked")
 	public void testMultiLanguageFieldExtractsPreferredLanguageAndNormalizesDob() throws Exception {
 		stubPacketFields("[{\"language\":\"eng\",\"value\":\"Ledley-EN\"},{\"language\":\"por\",\"value\":\"Ledley-PT\"}]",
-				"Quintas", "Masculino", "1996/02/22", "Mé-Zochi");
+				"Quintas", "Masculino", "1996/02/22");
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
 				.thenReturn(sigaResponseWithRecord());
 
@@ -211,7 +210,7 @@ public class SigaServiceTest {
 
 	@Test
 	public void testFieldsAreFetchedInASingleBatchedCall() throws Exception {
-		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Mé-Zochi");
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
 		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
 				.thenReturn(sigaResponseWithRecord());
 
@@ -222,20 +221,39 @@ public class SigaServiceTest {
 		verify(packetManagerService, never()).getField(any(), any(), any(), any());
 	}
 
+	/**
+	 * placeOfBirth is optional on the SIGA side and no longer sourced from the packet - it
+	 * must still be sent as a query param, just empty.
+	 */
+	@Test
+	@SuppressWarnings("unchecked")
+	public void testPlaceOfBirthIsSentEmpty() throws Exception {
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22");
+		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
+				.thenReturn(sigaResponseWithRecord());
+
+		sigaService.isVerified(REG_ID, PROCESS);
+
+		ArgumentCaptor<List<String>> namesCaptor = ArgumentCaptor.forClass(List.class);
+		ArgumentCaptor<List<Object>> valuesCaptor = ArgumentCaptor.forClass(List.class);
+		verify(restClientService).getApi(anyString(), isNull(), namesCaptor.capture(), valuesCaptor.capture(),
+				eq(SigaResponseDto.class));
+		int index = namesCaptor.getValue().indexOf("placeOfBirth");
+		assertEquals("", valuesCaptor.getValue().get(index));
+	}
+
 	private SigaResponseDto sigaResponseWithRecord() {
 		SigaResponseDto response = new SigaResponseDto();
 		response.setData(Collections.singletonList(new SigaRecordDto()));
 		return response;
 	}
 
-	private void stubPacketFields(String firstName, String surname, String gender, String dob, String district)
-			throws Exception {
+	private void stubPacketFields(String firstName, String surname, String gender, String dob) throws Exception {
 		Map<String, String> fieldMap = new HashMap<>();
 		fieldMap.put("firstName", firstName);
 		fieldMap.put("surname", surname);
 		fieldMap.put("gender", gender);
 		fieldMap.put("dob", dob);
-		fieldMap.put("district", district);
 		when(packetManagerService.getFields(eq(REG_ID), any(), eq(PROCESS), eq(ProviderStageName.DEMO_DEDUPE)))
 				.thenReturn(fieldMap);
 	}
