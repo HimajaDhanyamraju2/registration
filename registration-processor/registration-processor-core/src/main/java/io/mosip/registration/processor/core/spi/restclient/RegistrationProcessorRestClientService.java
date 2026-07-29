@@ -186,5 +186,19 @@ import io.mosip.registration.processor.core.exception.ApisResourceAccessExceptio
 	public T postApi(String url, MediaType mediaType, List<String> pathsegments, List<String> queryParam, List<Object> queryParamValue,
 			 T requestedData, Class<?> responseType) throws ApisResourceAccessException;
 
+	/**
+	 * Get api.
+	 *
+	 * @param url the url
+	 * @param pathsegments the pathsegments
+	 * @param queryParam the query param
+	 * @param queryParamValue the query param value
+	 * @param responseType the response type
+	 * @return the t
+	 * @throws ApisResourceAccessException the apis resource access exception
+	 */
+	public T getApi(String url, List<String> pathsegments, List<String> queryParam, List<Object> queryParamValue,
+			Class<?> responseType) throws ApisResourceAccessException;
+
 	public Integer headApi(ApiName apiName, List<String> pathsegments, List<String> queryParamName, List<Object> queryParamValue) throws ApisResourceAccessException;
 }

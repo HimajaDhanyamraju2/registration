@@ -90,11 +90,13 @@ public class DemodedupeProcessor {
 	@Autowired
 	private DemoDedupe demoDedupe;
 
+	/** The siga service. */
+	@Autowired
+	private SigaService sigaService;
+
 	/** The packet info manager. */
 	@Autowired
 	private PacketInfoManager<Identity, ApplicantInfoDto> packetInfoManager;
-
-
 
 	/** The registration exception mapper util. */
 	RegistrationExceptionMapperUtil registrationExceptionMapperUtil = new RegistrationExceptionMapperUtil();
@@ -357,6 +359,13 @@ public class DemodedupeProcessor {
 		if (packetStatus.equalsIgnoreCase(AbisConstant.PRE_ABIS_IDENTIFICATION)) {
 			packetInfoManager.saveIndividualDemographicDedupeUpdatePacket(demographicData, registrationId, moduleId,
 					registrationStatusDto.getRegistrationType(),moduleName,registrationStatusDto.getIteration(), registrationStatusDto.getWorkflowInstanceId());
+
+			if (!verifyWithSiga(registrationStatusDto, object, description)) {
+				demoDedupeStatusDTO.setTransactionSuccessful(false);
+				demoDedupeStatusDTO.setDuplicateDtos(duplicateDtos);
+				return demoDedupeStatusDTO;
+			}
+
 			int age = utility.getApplicantAge(registrationId, registrationStatusDto.getRegistrationType(), ProviderStageName.DEMO_DEDUPE);
 			int ageThreshold = Integer.parseInt(ageLimit);
 			if (age < ageThreshold) {
@@ -402,6 +411,35 @@ public class DemodedupeProcessor {
 		demoDedupeStatusDTO.setDuplicateDtos(duplicateDtos);
 		return demoDedupeStatusDTO;
 
+	}
+
+	/**
+	 * Verifies the applicant against the external SIGA registry before the local demographic
+	 * dedupe check runs. If SIGA reports no matching record (empty response or 404), the
+	 * packet is paused so it can be routed to manual verification later, instead of
+	 * proceeding with dedupe.
+	 *
+	 * @return true if dedupe should proceed, false if the packet was paused
+	 */
+	private boolean verifyWithSiga(InternalRegistrationStatusDto registrationStatusDto, MessageDTO object,
+			LogDescription description)
+			throws ApisResourceAccessException, JsonProcessingException, PacketManagerException, IOException {
+		String registrationId = registrationStatusDto.getRegistrationId();
+		boolean recordFound = sigaService.isVerified(registrationId, registrationStatusDto.getRegistrationType());
+		if (recordFound) {
+			return true;
+		}
+
+		object.setIsValid(Boolean.FALSE);
+		registrationStatusDto.setStatusCode(RegistrationStatusCode.PAUSED.name());
+		registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
+		registrationStatusDto.setStatusComment(StatusUtil.SIGA_RECORD_NOT_FOUND.getMessage());
+		registrationStatusDto.setSubStatusCode(StatusUtil.SIGA_RECORD_NOT_FOUND.getCode());
+		description.setCode(PlatformErrorMessages.RPR_DEMO_SIGA_RECORD_NOT_FOUND.getCode());
+		description.setMessage(PlatformErrorMessages.RPR_DEMO_SIGA_RECORD_NOT_FOUND.getMessage() + " -- " + registrationId);
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+				registrationId, "DemodedupeProcessor::verifyWithSiga():: No matching SIGA record found, pausing packet for manual verification");
+		return false;
 	}
 
 

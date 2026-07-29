@@ -1407,6 +1407,10 @@ public enum PlatformErrorMessages {
 	RPR_DEMO_API_RESOUCE_ACCESS_FAILED(PlatformConstants.RPR_DEMO_DEDUPE_MODULE + "002",
 			"Unable to Access API Resource"),
 
+	/** The rpr demo siga record not found. */
+	RPR_DEMO_SIGA_RECORD_NOT_FOUND(PlatformConstants.RPR_DEMO_DEDUPE_MODULE + "004",
+			"SIGA Verification Failed. No matching NIP record found, packet paused for manual verification"),
+
 	RPR_SECUREZONE_FAILURE(PlatformConstants.RPR_SECUREZONE_NOTIFICATION_MODULE + "001",
 			"Exception occured in securezone notification stage. Check logs for more info"),
 

@@ -473,6 +473,48 @@ public class RegistrationProcessorRestClientServiceImpl implements RegistrationP
 	}
 
 	@Override
+	public Object getApi(String url, List<String> pathsegments, List<String> queryParamName,
+			List<Object> queryParamValue, Class<?> responseType) throws ApisResourceAccessException {
+		Object obj = null;
+		UriComponentsBuilder builder = null;
+		if (url != null)
+			builder = UriComponentsBuilder.fromUriString(url);
+		if (builder != null) {
+
+			if (!((pathsegments == null) || (pathsegments.isEmpty()))) {
+				for (String segment : pathsegments) {
+					if (!((segment == null) || (("").equals(segment)))) {
+						builder.pathSegment(segment);
+					}
+				}
+
+			}
+			if (!CollectionUtils.isEmpty(queryParamName)) {
+
+				for (int i = 0; i < queryParamName.size(); i++) {
+					builder.queryParam(queryParamName.get(i), queryParamValue.get(i));
+				}
+			}
+
+			try {
+				obj = restApiClient.getApi(builder.build(false).encode().toUri(), responseType);
+
+			} catch (Exception e) {
+				regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
+						LoggerFileConstant.REGISTRATIONID.toString(), "",
+						e.getMessage() + ExceptionUtils.getStackTrace(e));
+
+				throw new ApisResourceAccessException(
+						PlatformErrorMessages.RPR_RCT_UNKNOWN_RESOURCE_EXCEPTION.getMessage(), e);
+
+			}
+		}
+		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), "",
+				"RegistrationProcessorRestClientServiceImpl::getApi()::exit");
+		return obj;
+	}
+
+	@Override
 	public Integer headApi(ApiName apiName, List<String> pathsegments, List<String> queryParamName, List<Object> queryParamValue) throws ApisResourceAccessException {
 		regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.USERID.toString(), "",
 				"RegistrationProcessorRestClientServiceImpl::headApi()::entry");

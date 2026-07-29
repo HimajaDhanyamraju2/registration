@@ -84,6 +84,8 @@ import io.mosip.registration.processor.rest.client.audit.builder.AuditLogRequest
 import io.mosip.registration.processor.rest.client.audit.dto.AuditResponseDto;
 import io.mosip.registration.processor.stages.demodedupe.DemoDedupe;
 import io.mosip.registration.processor.stages.demodedupe.DemodedupeProcessor;
+import io.mosip.registration.processor.stages.demodedupe.SigaService;
+import io.mosip.registration.processor.status.code.RegistrationStatusCode;
 import io.mosip.registration.processor.status.code.RegistrationType;
 import io.mosip.registration.processor.status.dao.RegistrationStatusDao;
 import io.mosip.registration.processor.status.dto.InternalRegistrationStatusDto;
@@ -117,6 +119,9 @@ public class DemodedupeProcessorTest {
 	/** The demo dedupe. */
 	@Mock
 	private DemoDedupe demoDedupe;
+
+	@Mock
+	private SigaService sigaService;
 
 	@Mock
 	private InputStream inputStream;
@@ -187,6 +192,7 @@ public class DemodedupeProcessorTest {
 		dto.setRid("2018701130000410092018110735");
 
 		MockitoAnnotations.initMocks(this);
+		when(sigaService.isVerified(any(), any())).thenReturn(true);
 
 		DemographicInfoDto dto1 = new DemographicInfoDto();
 		dto1.setRegId("2018701130000413092018110263");
@@ -898,5 +904,54 @@ public class DemodedupeProcessorTest {
 		MessageDTO messageDto = demodedupeProcessor.process(dto, stageName);
 		assertTrue(messageDto.getInternalError());
 
+	}
+
+	/**
+	 * When SIGA has no matching record (empty response / 404), the packet must be paused
+	 * before the local dedupe check runs.
+	 */
+	@Test
+	public void testDemoDedupeSigaRecordNotFoundPausesPacket() throws Exception {
+		when(env.getProperty(DEMODEDUPEENABLE)).thenReturn("true");
+		byte[] b = "sds".getBytes();
+		Mockito.when(utility.getApplicantAge(anyString(), anyString(), any())).thenReturn(20);
+		PowerMockito.mockStatic(JsonUtil.class);
+		PowerMockito.mockStatic(IOUtils.class);
+		PowerMockito.when(JsonUtil.class, "inputStreamtoJavaObject", inputStream, PacketMetaInfo.class)
+				.thenReturn(packetMetaInfo);
+		PowerMockito.when(IOUtils.class, "toByteArray", inputStream).thenReturn(b);
+		Mockito.when(registrationStatusService.getRegistrationStatus(any(), any(), any(), any()))
+				.thenReturn(registrationStatusDto);
+		Mockito.when(abisHandlerUtil.getPacketStatus(any())).thenReturn(AbisConstant.PRE_ABIS_IDENTIFICATION);
+		Mockito.when(sigaService.isVerified(any(), any())).thenReturn(false);
+
+		MessageDTO messageDto = demodedupeProcessor.process(dto, stageName);
+
+		assertFalse(messageDto.getIsValid());
+		assertFalse(messageDto.getInternalError());
+		assertEquals(RegistrationStatusCode.PAUSED.name(), registrationStatusDto.getStatusCode());
+		Mockito.verify(demoDedupe, Mockito.never()).performDedupe(anyString());
+	}
+
+	/**
+	 * When the SIGA API keeps failing (e.g. network/5xx errors) after retries are exhausted,
+	 * the exception must propagate as a reprocess-able failure, same as any other external
+	 * API resource access failure in this stage.
+	 */
+	@Test
+	public void testDemoDedupeSigaApiFailurePropagatesAsReprocess() throws Exception {
+		when(env.getProperty(DEMODEDUPEENABLE)).thenReturn("true");
+		Mockito.when(utility.getApplicantAge(anyString(), anyString(), any())).thenReturn(20);
+		Mockito.when(registrationStatusService.getRegistrationStatus(any(), any(), any(), any()))
+				.thenReturn(registrationStatusDto);
+		Mockito.when(abisHandlerUtil.getPacketStatus(any())).thenReturn(AbisConstant.PRE_ABIS_IDENTIFICATION);
+		Mockito.when(registrationStatusMapperUtil
+				.getStatusCode(RegistrationExceptionTypeCode.APIS_RESOURCE_ACCESS_EXCEPTION)).thenReturn("REPROCESS");
+		Mockito.when(sigaService.isVerified(any(), any()))
+				.thenThrow(new ApisResourceAccessException("SIGA API call failed"));
+
+		MessageDTO messageDto = demodedupeProcessor.process(dto, stageName);
+
+		assertTrue(messageDto.getInternalError());
 	}
 }
