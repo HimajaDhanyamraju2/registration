@@ -58,6 +58,9 @@ public class SigaService {
 	@Value("${mosip.regproc.national-id.preferred-language:por}")
 	private String preferredLanguage;
 
+	@Value("${mosip.regproc.demo.dedupe.siga.citizen-values:Cidadão,Citizen}")
+	private String citizenValues;
+
 	@Autowired
 	private Utilities utilities;
 
@@ -65,11 +68,13 @@ public class SigaService {
 	private RegistrationProcessorRestClientService<Object> restClientService;
 
 	/**
-	 * Looks up the applicant in SIGA by first/last name, gender and date of birth. Returns
-	 * true when SIGA reports a matching record (or when the SIGA check is disabled), false
-	 * when SIGA has no matching record (HTTP 404 or empty {@code data}) - callers are
-	 * expected to pause the packet for manual verification in that case rather than proceed
-	 * with the local dedupe check.
+	 * Looks up the applicant in SIGA by first/last name, gender, date of birth and place of
+	 * birth. Returns true when SIGA reports a matching record, when the SIGA check is
+	 * disabled, or when the applicant's residenceStatus is not a citizen (SIGA only holds
+	 * citizen records, so non-citizens skip the check entirely). Returns false when SIGA has
+	 * no matching record (HTTP 404 or empty {@code data}) - callers are expected to pause the
+	 * packet for manual verification in that case rather than proceed with the local dedupe
+	 * check.
 	 *
 	 * @throws ApisResourceAccessException if the SIGA API keeps failing after retries are
 	 *             exhausted, so the caller can route the packet for automatic reprocessing
@@ -88,18 +93,57 @@ public class SigaService {
 		String dobFieldName = JsonUtil.getJSONValue(
 				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.DOB),
 				MappingJsonConstants.VALUE);
+		String residenceStatusFieldName = JsonUtil.getJSONValue(
+				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.RESIDENCE_STATUS),
+				MappingJsonConstants.VALUE);
+		String placeOfBirthFieldName = JsonUtil.getJSONValue(
+				JsonUtil.getJSONObject(regProcessorIdentityJson, MappingJsonConstants.PLACE_OF_BIRTH),
+				MappingJsonConstants.VALUE);
 
-		List<String> fields = Arrays.asList(FIRST_NAME_FIELD, SURNAME_FIELD, genderFieldName, dobFieldName);
+		List<String> fields = Arrays.asList(FIRST_NAME_FIELD, SURNAME_FIELD, genderFieldName, dobFieldName,
+				residenceStatusFieldName, placeOfBirthFieldName);
 		Map<String, String> fieldMap = utilities.getPacketManagerService().getFields(registrationId, fields, process,
 				ProviderStageName.DEMO_DEDUPE);
+
+		String residenceStatus = extractLanguageValue(fieldMap.get(residenceStatusFieldName));
+		//TODO: temp log: to be removed before production
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
+					LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+					"SigaService::residenceStatus:: " + residenceStatus);
+		if (!isCitizen(residenceStatus)) {
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
+					LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
+					"SigaService::isVerified():: residenceStatus '" + residenceStatus
+							+ "' is not a citizen - skipping SIGA verification");
+			return true;
+		}
 
 		String firstName = extractLanguageValue(fieldMap.get(FIRST_NAME_FIELD));
 		String lastName = extractLanguageValue(fieldMap.get(SURNAME_FIELD));
 		String gender = toSigaGender(extractLanguageValue(fieldMap.get(genderFieldName)));
 		String birthDate = toSigaDate(extractLanguageValue(fieldMap.get(dobFieldName)));
+		String placeOfBirth = extractLanguageValue(fieldMap.get(placeOfBirthFieldName));
 
-		// placeOfBirth is optional on the SIGA side - not sourced from the packet.
-		return callSigaWithRetry(registrationId, firstName, lastName, gender, birthDate, "");
+		return callSigaWithRetry(registrationId, firstName, lastName, gender, birthDate,
+				placeOfBirth != null ? placeOfBirth : "");
+	}
+
+	/**
+	 * Checks whether the applicant's residenceStatus marks them as a citizen. SIGA is the
+	 * Sao Tome civil registry and only holds citizen records, so non-citizens (and packets
+	 * missing the field) are not sent to SIGA.
+	 */
+	private boolean isCitizen(String residenceStatus) {
+		if (residenceStatus == null || residenceStatus.trim().isEmpty()) {
+			return false;
+		}
+		String trimmed = residenceStatus.trim();
+		for (String citizenValue : citizenValues.split(",")) {
+			if (trimmed.equalsIgnoreCase(citizenValue.trim())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private boolean callSigaWithRetry(String registrationId, String firstName, String lastName, String gender,
