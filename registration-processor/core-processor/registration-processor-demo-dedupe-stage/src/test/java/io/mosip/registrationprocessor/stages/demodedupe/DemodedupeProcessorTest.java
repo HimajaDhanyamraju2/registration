@@ -51,6 +51,7 @@ import io.mosip.registration.processor.core.code.ApiName;
 import io.mosip.registration.processor.core.code.EventId;
 import io.mosip.registration.processor.core.code.EventName;
 import io.mosip.registration.processor.core.code.EventType;
+import io.mosip.registration.processor.core.code.ModuleName;
 import io.mosip.registration.processor.core.code.RegistrationExceptionTypeCode;
 import io.mosip.registration.processor.core.constant.AbisConstant;
 import io.mosip.registration.processor.core.constant.MappingJsonConstants;
@@ -58,6 +59,7 @@ import io.mosip.registration.processor.core.constant.PacketFiles;
 import io.mosip.registration.processor.core.exception.ApisResourceAccessException;
 import io.mosip.registration.processor.core.exception.PacketManagerException;
 import io.mosip.registration.processor.core.exception.RegistrationProcessorCheckedException;
+import io.mosip.registration.processor.core.exception.util.PlatformErrorMessages;
 import io.mosip.registration.processor.core.http.ResponseWrapper;
 import io.mosip.registration.processor.core.logger.LogDescription;
 import io.mosip.registration.processor.core.packet.dto.FieldValue;
@@ -931,6 +933,13 @@ public class DemodedupeProcessorTest {
 		assertFalse(messageDto.getInternalError());
 		assertEquals(RegistrationStatusCode.PAUSED.name(), registrationStatusDto.getStatusCode());
 		Mockito.verify(demoDedupe, Mockito.never()).performDedupe(anyString());
+		// updateRegistrationStatus (unlike updateRegistrationStatusForWorkflowEngine) never
+		// persists a custom overall status code - it must not be used for the paused path,
+		// otherwise PAUSED silently reverts to whatever status was already in the DB.
+		Mockito.verify(registrationStatusService, Mockito.never()).updateRegistrationStatus(any(), any(), any());
+		Mockito.verify(registrationStatusService, Mockito.times(1)).updateRegistrationStatusForWorkflowEngine(
+				registrationStatusDto, PlatformErrorMessages.RPR_DEMO_SIGA_RECORD_NOT_FOUND.getCode(),
+				ModuleName.DEMO_DEDUPE.toString());
 	}
 
 	/**

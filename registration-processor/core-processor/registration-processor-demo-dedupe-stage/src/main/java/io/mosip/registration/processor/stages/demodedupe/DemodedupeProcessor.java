@@ -119,6 +119,14 @@ public class DemodedupeProcessor {
 	/** The is match found. */
 	private volatile boolean isMatchFound = false;
 
+	/**
+	 * Set when a packet is paused because SIGA found no matching record. Only
+	 * {@link io.mosip.registration.processor.status.service.RegistrationStatusService#updateRegistrationStatusForWorkflowEngine}
+	 * (unlike the plain updateRegistrationStatus overload) actually persists a custom overall
+	 * status code such as PAUSED - so the finally block needs to know to call that instead.
+	 */
+	private volatile boolean isSigaPaused = false;
+
 	private static final String DEMODEDUPEENABLE = "mosip.registration.processor.demographic.deduplication.enable";
 
 	private static final String TRUE = "true";
@@ -155,6 +163,7 @@ public class DemodedupeProcessor {
 		object.setInternalError(Boolean.FALSE);
 		object.setIsValid(Boolean.FALSE);
 		isMatchFound = false;
+		isSigaPaused = false;
 
 		/** The duplicate dtos. */
 		List<DemographicInfoDto> duplicateDtos = new ArrayList<>();
@@ -249,7 +258,16 @@ public class DemodedupeProcessor {
 			moduleId = isTransactionSuccessful ? PlatformSuccessMessages.RPR_PKR_DEMO_DE_DUP.getCode()
 					: description.getCode();
 
-			registrationStatusService.updateRegistrationStatus(registrationStatusDto, moduleId, moduleName);
+			if (isSigaPaused) {
+				// The method updateRegistrationStatus overload never persists a custom overall
+				// status code (see updateStatusCode in RegistrationStatusServiceImpl) - only
+				// updateRegistrationStatusForWorkflowEngine does, which is what actually makes
+				// PAUSED show up instead of silently falling back to FAILED.
+				registrationStatusService.updateRegistrationStatusForWorkflowEngine(registrationStatusDto, moduleId,
+						moduleName);
+			} else {
+				registrationStatusService.updateRegistrationStatus(registrationStatusDto, moduleId, moduleName);
+			}
 			try {
 				if (isMatchFound) {
 					saveDuplicateDtoList(duplicateDtos, registrationStatusDto, object);
@@ -431,6 +449,7 @@ public class DemodedupeProcessor {
 		}
 
 		object.setIsValid(Boolean.FALSE);
+		isSigaPaused = true;
 		registrationStatusDto.setStatusCode(RegistrationStatusCode.PAUSED.name());
 		registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
 		registrationStatusDto.setStatusComment(StatusUtil.SIGA_RECORD_NOT_FOUND.getMessage());
