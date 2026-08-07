@@ -498,7 +498,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 					MappingJsonConstants.VALUE);
 
 			List<String> fields = new ArrayList<>(Arrays.asList("firstName","surname","addressLine1","addressLine2",
-					"municipality","town",dob,gender,email,"height","countryOfCitizenship"));
+					"municipality","town",dob,gender,email,"height","countryOfCitizenship","maritalStatus"));
 
 			fieldMap = utilities.getPacketManagerService()
 					.getFields(regId, fields, process, ProviderStageName.CREDENTIAL_REQUESTOR);
@@ -614,6 +614,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 				.atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z");
 		credentialData.put("expiresAt", expiresAt);
 		credentialData.put("dateOfBirth", convertToISODate(getFieldValue(fieldMap, "dateOfBirth", preferredLang)));
+		credentialData.put("maritalStatus", toUpper(getFieldValue(fieldMap, "maritalStatus", preferredLang)));
 
 		Map<String, Object> photo = new HashMap<>();
 		photo.put("storage", "base64");
