@@ -604,7 +604,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		credentialData.put("addressLine3", toUpper(getFieldValue(fieldMap, "municipality", preferredLang)));
 		credentialData.put("addressLine4", toUpper(getFieldValue(fieldMap, "town", preferredLang)));
 		credentialData.put("surnameLine1", toUpper(getFieldValue(fieldMap, "surname", preferredLang)));
-		credentialData.put("surnameLine2", "");
+		credentialData.put("surnameLine2", null);
 		credentialData.put("firstName", toUpper(getFieldValue(fieldMap, "firstName", preferredLang)));
 		credentialData.put("sex", toGenderCode(getFieldValue(fieldMap, "gender", preferredLang)));
 		credentialData.put("height", getFieldValue(fieldMap, "height", preferredLang));
