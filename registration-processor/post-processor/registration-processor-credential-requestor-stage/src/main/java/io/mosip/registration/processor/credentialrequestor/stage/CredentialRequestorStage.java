@@ -688,7 +688,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		credentialData.put("placeOfBirth", toUpper(getFieldValue(fieldMap, "city", preferredLang)));
 		credentialData.put("nationality", toUpper(nationality));
 		credentialData.put("dateOfIssue", LocalDate.now().atStartOfDay().toInstant(ZoneOffset.UTC).toString().replace("Z", ".000Z"));
-		credentialData.put("dateOfBirth", convertToISODate(dobRaw));
+		credentialData.put("dob", convertToISODate(dobRaw));
 		credentialData.put("mrz_line_1", generateMrzLine1(toUpper(surName), toUpper(givenName)));
 		credentialData.put("mrz_line_2", generateMrzLine2(docNumber, toMrzDate(dobRaw), toMrzSex(sex), LocalDate.now().plusYears(10).format(DateTimeFormatter.ofPattern("yyMMdd"))));
 
