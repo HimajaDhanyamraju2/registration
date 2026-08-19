@@ -597,6 +597,10 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		request.put("issuer_info", issuerInfo);
 		request.put("issuer_credential_template_id", credIssuerTemplateId);
 
+		Map<String, Object> metadata = new HashMap<>();
+		metadata.put("registrationId", regId);
+		request.put("metadata", Collections.singletonList(metadata));
+
 		Map<String, Object> credentialData = new HashMap<>();
 		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
 		credentialData.put("addressLine1", toUpper(getFieldValue(fieldMap, "addressLine1", preferredLang)));
