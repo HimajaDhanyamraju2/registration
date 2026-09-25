@@ -3,11 +3,13 @@ package io.mosip.registration.processor.credentialrequestor.stage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mosip.biometrics.util.ConvertRequestDto;
 import io.mosip.biometrics.util.face.FaceDecoder;
+import io.mosip.kernel.biometrics.commons.CbeffValidator;
 import io.mosip.kernel.biometrics.entities.BIR;
 import io.mosip.kernel.biometrics.entities.BiometricRecord;
 import io.mosip.kernel.core.exception.BaseUncheckedException;
 import io.mosip.kernel.core.exception.ServiceError;
 import io.mosip.kernel.core.logger.spi.Logger;
+import io.mosip.kernel.core.util.CryptoUtil;
 import io.mosip.kernel.core.util.DateUtils;
 import io.mosip.registration.processor.core.abstractverticle.*;
 import io.mosip.registration.processor.core.code.EventId;
@@ -23,6 +25,7 @@ import io.mosip.registration.processor.core.http.RequestWrapper;
 import io.mosip.registration.processor.core.http.ResponseWrapper;
 import io.mosip.registration.processor.core.idrepo.dto.CredentialRequestDto;
 import io.mosip.registration.processor.core.idrepo.dto.CredentialResponseDto;
+import io.mosip.registration.processor.core.idrepo.dto.Documents;
 import io.mosip.registration.processor.core.idrepo.dto.VidInfoDTO;
 import io.mosip.registration.processor.core.idrepo.dto.VidsInfosDTO;
 import io.mosip.registration.processor.core.logger.LogDescription;
@@ -37,6 +40,7 @@ import io.mosip.registration.processor.credentialrequestor.util.CredentialPartne
 import io.mosip.registration.processor.packet.storage.utils.Utilities;
 import io.mosip.registration.processor.rest.client.audit.builder.AuditLogRequestBuilder;
 import io.mosip.registration.processor.status.code.RegistrationStatusCode;
+import io.mosip.registration.processor.status.code.RegistrationType;
 import io.mosip.registration.processor.status.dto.InternalRegistrationStatusDto;
 import io.mosip.registration.processor.status.dto.RegistrationStatusDto;
 import io.mosip.registration.processor.status.service.RegistrationStatusService;
@@ -127,16 +131,22 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 	@Value("${mosip.registration.processor.encrypt:false}")
 	private boolean encrypt;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.url:https://autenticacao.gov.st//api/credentials/issue/client/bulk}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.url:https://autenticacao.gov.st/api/credentials/issue/client/bulk}")
 	private String credIssuerUrl;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.reissue-url:https://autenticacao.gov.st/api/credentials/issue/client/reissue}")
+	private String credIssuerReissueUrl;
+
+	@Value("${mosip.regproc.credentialrequestor.credissuer.reissue-queue:true}")
+	private boolean credIssuerReissueQueue;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.auth:Bearer 70e09182bf0e4abf81a431d89b066bb1}")
 	private String credIssuerAuthHeader;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:1A1911ABDEC6}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.template-id:DC6C616359D5}")
 	private String credIssuerTemplateId;
 
-	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:CHAS-7EAA8DD9}")
+	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-org-code:DEFAU-QZQ8Q}")
 	private String issuerOrgCode;
 
 	@Value("${mosip.regproc.credentialrequestor.credissuer.issuer-email:issuer.stp@gov.st}")
@@ -178,6 +188,11 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 
 	@Value("#{T(java.util.Arrays).asList('${mosip.registration.processor.credential.default.partner-ids:}')}")
 	private List<String> defaultPartners;
+
+	/** Field names read by buildCredIssuerRequest */
+	private static final List<String> CRED_ISSUER_FIELDS = Arrays.asList("firstName", "surname", "addressLine1",
+			"addressLine2", "municipality", "town", "dateOfBirth", "gender", "email", "height",
+			"countryOfCitizenship", "maritalStatus");
 
 	private static String COMMA = ",";
 	private static String HASH_DELIMITER = "#";
@@ -308,7 +323,7 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 				}
 				if (isTransactionSuccessful) {
 					String identifier = (nid != null && !nid.isEmpty()) ? nid : uin;
-					callCredIssuer(regId, identifier, registrationStatusDto.getRegistrationType());
+					callCredIssuer(regId, uin, identifier, registrationStatusDto.getRegistrationType(), jsonObject);
 					registrationStatusDto.setRefId(refIds);
 					object.setIsValid(Boolean.TRUE);
 					description.setMessage(PlatformSuccessMessages.RPR_PRINT_STAGE_REQUEST_SUCCESS.getMessage());
@@ -430,12 +445,22 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		}
 	}
 
-	private void callCredIssuer(String regId, String identifier, String process) {
+	private void callCredIssuer(String regId, String uin, String identifier, String process, JSONObject idrepoIdentity) {
+		boolean isReissue = RegistrationType.UPDATE.name().equalsIgnoreCase(process)
+				|| RegistrationType.RES_UPDATE.name().equalsIgnoreCase(process);
 		Map<String, String> fieldMap = getCredentialFieldMap(regId, process);
-		Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap);
+		if (isReissue) {
+			// update packet carries only the changed fields, so fill the rest from the (already updated) id repo identity
+			mergeIdrepoFields(regId, fieldMap, idrepoIdentity);
+			if (StringUtils.isEmpty(fieldMap.get("face"))) {
+				addFaceFromIdrepo(regId, uin, fieldMap);
+			}
+		}
+		Map<String, Object> request = buildCredIssuerRequest(regId, identifier, fieldMap, isReissue);
 
 		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
-				"PrintServiceImpl::callCredIssuer():: credIssuer API request created");
+				"PrintServiceImpl::callCredIssuer():: credIssuer " + (isReissue ? "reissue" : "issue")
+						+ " API request created");
 
 		// TODO: remove before production
 		try {
@@ -451,13 +476,23 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		headers.set("Authorization", credIssuerAuthHeader);
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		HttpEntity<Object> requestEntity = new HttpEntity<>(request, headers);
-		List<String> queryParamNames = Arrays.asList("credential_template", "mode_of_issuance");
-		List<Object> queryParamValues = Arrays.asList(credIssuerTemplateId, credIssuerModeOfIssuance);
+		String url;
+		List<String> queryParamNames;
+		List<Object> queryParamValues;
+		if (isReissue) {
+			url = credIssuerReissueUrl;
+			queryParamNames = Collections.singletonList("queue");
+			queryParamValues = Collections.singletonList(credIssuerReissueQueue);
+		} else {
+			url = credIssuerUrl;
+			queryParamNames = Arrays.asList("credential_template", "mode_of_issuance");
+			queryParamValues = Arrays.asList(credIssuerTemplateId, credIssuerModeOfIssuance);
+		}
 
 		Exception lastException = null;
 		for (int attempt = 1; attempt <= credIssuerMaxRetries; attempt++) {
 			try {
-				restClientService.postApi(credIssuerUrl, MediaType.APPLICATION_JSON, null, queryParamNames,
+				restClientService.postApi(url, MediaType.APPLICATION_JSON, null, queryParamNames,
 						queryParamValues, requestEntity, Object.class);
 				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
 						"PrintServiceImpl::callCredIssuer():: credIssuer API called successfully on attempt " + attempt);
@@ -513,23 +548,9 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 						MappingJsonConstants.VALUE);
 				BiometricRecord biometricRecord = utilities.getPacketManagerService().getBiometrics(
 						regId, individualBiometricsLabel, modalities, process, ProviderStageName.CREDENTIAL_REQUESTOR);
-				List<BIR> segments = biometricRecord.getSegments();
-
-				for (BIR bir : segments) {
-					if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
-						byte[] isoBytes = bir.getBdb();
-
-						ConvertRequestDto convertRequestDto = new ConvertRequestDto();
-						convertRequestDto.setInputBytes(isoBytes);
-						convertRequestDto.setVersion("ISO19794_5_2011");
-
-						byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
-
-						String faceBase64 = Base64.getEncoder().encodeToString(imageBytes);
-
-						fieldMap.put("face", faceBase64);
-					}
-				}
+				String faceBase64 = getFaceBase64(biometricRecord.getSegments());
+				if (faceBase64 != null)
+					fieldMap.put("face", faceBase64);
 				regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
 						"PrintServiceImpl::getCredentialFieldMap():: Fetched face biometric for credIssuer API request");
 			} catch (Throwable t) {
@@ -585,7 +606,63 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		}
 	}
 
-	private Map<String, Object> buildCredIssuerRequest(String regId, String identifier, Map<String, String> fieldMap) {
+	private void mergeIdrepoFields(String regId, Map<String, String> fieldMap, JSONObject idrepoIdentity) {
+		if (idrepoIdentity == null)
+			return;
+		for (String field : CRED_ISSUER_FIELDS) {
+			Object idrepoValue = idrepoIdentity.get(field);
+			if (StringUtils.isNotEmpty(fieldMap.get(field)) || idrepoValue == null)
+				continue;
+			try {
+				fieldMap.put(field, idrepoValue instanceof String ? (String) idrepoValue
+						: mapper.writeValueAsString(idrepoValue));
+			} catch (Exception e) {
+				regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+						"PrintServiceImpl::mergeIdrepoFields():: failed to read field " + field + " from id repo: " + e.getMessage());
+			}
+		}
+		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+				"PrintServiceImpl::mergeIdrepoFields():: Merged id repo field values for credIssuer reissue request");
+	}
+
+	private void addFaceFromIdrepo(String regId, String uin, Map<String, String> fieldMap) {
+		try {
+			List<Documents> documents = utilities.retrieveIdrepoDocument(uin);
+			if (documents == null)
+				return;
+			for (Documents document : documents) {
+				if (MappingJsonConstants.INDIVIDUAL_BIOMETRICS.equalsIgnoreCase(document.getCategory())
+						&& StringUtils.isNotEmpty(document.getValue())) {
+					BIR bir = CbeffValidator.getBIRFromXML(CryptoUtil.decodeURLSafeBase64(document.getValue()));
+					String face = getFaceBase64(bir.getBirs());
+					if (face != null)
+						fieldMap.put("face", face);
+					break;
+				}
+			}
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+					"PrintServiceImpl::addFaceFromIdrepo():: Fetched face biometric from id repo for credIssuer reissue request");
+		} catch (Throwable t) {
+			regProcLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
+					"Failed to extract face biometric from id repo, proceeding without photo: " + t);
+		}
+	}
+
+	private String getFaceBase64(List<BIR> segments) throws Exception {
+		for (BIR bir : segments) {
+			if ("Face".equalsIgnoreCase(bir.getBdbInfo().getType().get(0).value())) {
+				ConvertRequestDto convertRequestDto = new ConvertRequestDto();
+				convertRequestDto.setInputBytes(bir.getBdb());
+				convertRequestDto.setVersion("ISO19794_5_2011");
+				byte[] imageBytes = FaceDecoder.convertFaceISOToImageBytes(convertRequestDto);
+				return Base64.getEncoder().encodeToString(imageBytes);
+			}
+		}
+		return null;
+	}
+
+	private Map<String, Object> buildCredIssuerRequest(String regId, String identifier, Map<String, String> fieldMap,
+			boolean isReissue) {
 		regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), regId,
 				"PrintServiceImpl::buildCredIssuerRequest():: Building credIssuer API request");
 
@@ -602,6 +679,8 @@ public class CredentialRequestorStage extends MosipVerticleAPIManager {
 		request.put("metadata", Collections.singletonList(metadata));
 
 		Map<String, Object> credentialData = new HashMap<>();
+		if (isReissue)
+			credentialData.put("_credential_id", identifier != null ? identifier : regId);
 		credentialData.put("email", getFieldValue(fieldMap, "email", preferredLang));
 		credentialData.put("addressLine1", toUpper(getFieldValue(fieldMap, "addressLine1", preferredLang)));
 		credentialData.put("addressLine2", toUpper(getFieldValue(fieldMap, "addressLine2", preferredLang)));
