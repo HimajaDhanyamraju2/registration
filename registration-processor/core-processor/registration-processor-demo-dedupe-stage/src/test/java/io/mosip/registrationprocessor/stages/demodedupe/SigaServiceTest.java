@@ -74,7 +74,7 @@ public class SigaServiceTest {
 		ReflectionTestUtils.setField(sigaService, "sigaRetryDelayMs", 1L);
 		ReflectionTestUtils.setField(sigaService, "preferredLanguage", "por");
 		ReflectionTestUtils.setField(sigaService, "sigaUrl", "https://leginon.dgrn.gov.st/api/nip");
-		ReflectionTestUtils.setField(sigaService, "citizenValues", "Cidadão,Citizen");
+		ReflectionTestUtils.setField(sigaService, "citizenValues", "Cidadao,Citizen");
 	}
 
 	/**
@@ -140,6 +140,19 @@ public class SigaServiceTest {
 		boolean result = sigaService.isVerified(REG_ID, PROCESS);
 
 		assertTrue(result);
+	}
+
+	@Test
+	public void testDecomposedCitizenValueStillCallsSiga() throws Exception {
+		// "Cidada" + combining tilde + "o" (NFD) must match the configured "Cidadao"
+		stubPacketFields("Ledley", "Quintas", "Masculino", "1996-02-22", "Cidadão", "Lisboa");
+		when(restClientService.getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class)))
+				.thenReturn(sigaResponseWithRecord());
+
+		boolean result = sigaService.isVerified(REG_ID, PROCESS);
+
+		assertTrue(result);
+		verify(restClientService, times(1)).getApi(anyString(), isNull(), any(), any(), eq(SigaResponseDto.class));
 	}
 
 	@Test

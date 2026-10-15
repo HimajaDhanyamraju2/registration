@@ -1,10 +1,12 @@
 package io.mosip.registration.processor.stages.demodedupe;
 
 import java.io.IOException;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -58,7 +60,7 @@ public class SigaService {
 	@Value("${mosip.regproc.national-id.preferred-language:por}")
 	private String preferredLanguage;
 
-	@Value("${mosip.regproc.demo.dedupe.siga.citizen-values:Cidadão,Citizen}")
+	@Value("${mosip.regproc.demo.dedupe.siga.citizen-values:Cidadao,Citizen}")
 	private String citizenValues;
 
 	@Autowired
@@ -114,7 +116,8 @@ public class SigaService {
 			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(),
 					LoggerFileConstant.REGISTRATIONID.toString(), registrationId,
 					"SigaService::isVerified():: residenceStatus '" + residenceStatus
-							+ "' is not a citizen - skipping SIGA verification");
+							+ "' is not a citizen (configured citizen values: '" + citizenValues
+							+ "') - skipping SIGA verification");
 			return true;
 		}
 
@@ -137,13 +140,23 @@ public class SigaService {
 		if (residenceStatus == null || residenceStatus.trim().isEmpty()) {
 			return false;
 		}
-		String trimmed = residenceStatus.trim();
+		String normalized = normalizeForComparison(residenceStatus);
 		for (String citizenValue : citizenValues.split(",")) {
-			if (trimmed.equalsIgnoreCase(citizenValue.trim())) {
+			if (normalized.equals(normalizeForComparison(citizenValue))) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Strips accents and case so "Cidadão" matches regardless of Unicode normalization form
+	 * (NFC vs NFD) in the packet, and so the config can use the ASCII form "Cidadao" (Spring
+	 * reads .properties files as ISO-8859-1, which garbles non-ASCII values).
+	 */
+	private String normalizeForComparison(String value) {
+		return Normalizer.normalize(value.trim(), Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+				.toLowerCase(Locale.ROOT);
 	}
 
 	private boolean callSigaWithRetry(String registrationId, String firstName, String lastName, String gender,
