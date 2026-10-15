@@ -3,6 +3,7 @@ package io.mosip.registration.processor.stages.demodedupe;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -119,13 +120,9 @@ public class DemodedupeProcessor {
 	/** The is match found. */
 	private volatile boolean isMatchFound = false;
 
-	/**
-	 * Set when a packet is paused because SIGA found no matching record. Only
-	 * {@link io.mosip.registration.processor.status.service.RegistrationStatusService#updateRegistrationStatusForWorkflowEngine}
-	 * (unlike the plain updateRegistrationStatus overload) actually persists a custom overall
-	 * status code such as PAUSED - so the finally block needs to know to call that instead.
-	 */
-	private volatile boolean isSigaPaused = false;
+	private static final String SIGA_VERIFICATION_TAG = "SIGA_VERIFICATION";
+
+	private static final String SIGA_VERIFICATION_PAUSED = "PAUSED";
 
 	private static final String DEMODEDUPEENABLE = "mosip.registration.processor.demographic.deduplication.enable";
 
@@ -163,12 +160,14 @@ public class DemodedupeProcessor {
 		object.setInternalError(Boolean.FALSE);
 		object.setIsValid(Boolean.FALSE);
 		isMatchFound = false;
-		isSigaPaused = false;
 
 		/** The duplicate dtos. */
 		List<DemographicInfoDto> duplicateDtos = new ArrayList<>();
 
 		boolean isTransactionSuccessful = false;
+		// Local (not a field) because this processor is a singleton shared across vert.x
+		// worker threads - a field would let another packet reset it mid-flight.
+		boolean isSigaPaused = false;
 		boolean isDemoDedupeSkip = true;
 		String moduleName = ModuleName.DEMO_DEDUPE.toString();
 		String moduleId = PlatformSuccessMessages.RPR_PKR_DEMO_DE_DUP.getCode();
@@ -189,6 +188,7 @@ public class DemodedupeProcessor {
 						duplicateDtos, object, moduleId, moduleName, isDemoDedupeSkip, description);
 				isTransactionSuccessful=demoDedupeStatusDTO.isTransactionSuccessful();
 				duplicateDtos=demoDedupeStatusDTO.getDuplicateDtos();
+				isSigaPaused=demoDedupeStatusDTO.isSigaPaused();
 			} else {
 				insertDemodedupDetails(demographicData, regProcessorIdentityJson, jsonObject, registrationStatusDto,
 						object, moduleId, moduleName);
@@ -380,6 +380,7 @@ public class DemodedupeProcessor {
 
 			if (!verifyWithSiga(registrationStatusDto, object, description)) {
 				demoDedupeStatusDTO.setTransactionSuccessful(false);
+				demoDedupeStatusDTO.setSigaPaused(true);
 				demoDedupeStatusDTO.setDuplicateDtos(duplicateDtos);
 				return demoDedupeStatusDTO;
 			}
@@ -449,7 +450,13 @@ public class DemodedupeProcessor {
 		}
 
 		object.setIsValid(Boolean.FALSE);
-		isSigaPaused = true;
+		// Lets the camel route tell a SIGA pause apart from a real failure, so it stops the
+		// flow instead of sending the packet to complete-as-rejected/failed (which would
+		// overwrite PAUSED).
+		if (object.getTags() == null) {
+			object.setTags(new HashMap<>());
+		}
+		object.getTags().put(SIGA_VERIFICATION_TAG, SIGA_VERIFICATION_PAUSED);
 		registrationStatusDto.setStatusCode(RegistrationStatusCode.PAUSED.name());
 		registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
 		registrationStatusDto.setStatusComment(StatusUtil.SIGA_RECORD_NOT_FOUND.getMessage());

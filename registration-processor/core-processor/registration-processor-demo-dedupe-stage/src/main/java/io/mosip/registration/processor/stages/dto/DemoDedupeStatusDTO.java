@@ -10,4 +10,7 @@ public class DemoDedupeStatusDTO {
 
 	private boolean isTransactionSuccessful;
 	List<DemographicInfoDto> duplicateDtos;
+
+	/** True when SIGA found no matching record and the packet was marked PAUSED. */
+	private boolean sigaPaused;
 }
