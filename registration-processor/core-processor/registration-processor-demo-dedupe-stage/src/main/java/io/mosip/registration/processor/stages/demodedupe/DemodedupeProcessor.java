@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -57,6 +58,7 @@ import io.mosip.registration.processor.core.util.JsonUtil;
 import io.mosip.registration.processor.core.util.RegistrationExceptionMapperUtil;
 import io.mosip.registration.processor.packet.storage.dto.ApplicantInfoDto;
 import io.mosip.registration.processor.packet.storage.utils.ABISHandlerUtil;
+import io.mosip.registration.processor.packet.storage.utils.PacketManagerService;
 import io.mosip.registration.processor.packet.storage.utils.Utilities;
 import io.mosip.registration.processor.rest.client.audit.builder.AuditLogRequestBuilder;
 import io.mosip.registration.processor.stages.app.constants.DemoDedupeConstants;
@@ -95,6 +97,9 @@ public class DemodedupeProcessor {
 	@Autowired
 	private SigaService sigaService;
 
+	@Autowired
+	private PacketManagerService packetManagerService;
+
 	/** The packet info manager. */
 	@Autowired
 	private PacketInfoManager<Identity, ApplicantInfoDto> packetInfoManager;
@@ -123,6 +128,11 @@ public class DemodedupeProcessor {
 	private static final String SIGA_VERIFICATION_TAG = "SIGA_VERIFICATION";
 
 	private static final String SIGA_VERIFICATION_PAUSED = "PAUSED";
+
+	private static final String SIGA_VERIFICATION_VERIFIED = "VERIFIED";
+
+	/** Set on the packet by the manual verification UI when a verifier approves a SIGA no-match. */
+	private static final String SIGA_VERIFICATION_MANUALLY_APPROVED = "MANUALLY_APPROVED";
 
 	private static final String DEMODEDUPEENABLE = "mosip.registration.processor.demographic.deduplication.enable";
 
@@ -444,19 +454,29 @@ public class DemodedupeProcessor {
 			LogDescription description)
 			throws ApisResourceAccessException, JsonProcessingException, PacketManagerException, IOException {
 		String registrationId = registrationStatusDto.getRegistrationId();
+		// A manual verifier approved this packet after an earlier SIGA no-match and resumed it;
+		// resume re-enters this stage, so skip SIGA or the packet would be paused again forever.
+		Map<String, String> existingTags = packetManagerService.getTags(registrationId,
+				Arrays.asList(SIGA_VERIFICATION_TAG));
+		if (existingTags != null
+				&& SIGA_VERIFICATION_MANUALLY_APPROVED.equals(existingTags.get(SIGA_VERIFICATION_TAG))) {
+			regProcLogger.info(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+					registrationId, "DemodedupeProcessor::verifyWithSiga():: packet manually approved after SIGA no-match - skipping SIGA");
+			return true;
+		}
 		boolean recordFound = sigaService.isVerified(registrationId, registrationStatusDto.getRegistrationType());
+		// Stored as a packet tag (not just on the message): MosipVerticleManager replaces the
+		// outgoing message's tags with the packet's tags, and the camel route reads this tag to
+		// stop the flow instead of sending the packet to complete-as-rejected (which would
+		// overwrite PAUSED). Written on every run so a stale PAUSED never outlives a later match.
+		Map<String, String> sigaTag = new HashMap<>();
+		sigaTag.put(SIGA_VERIFICATION_TAG, recordFound ? SIGA_VERIFICATION_VERIFIED : SIGA_VERIFICATION_PAUSED);
+		packetManagerService.addOrUpdateTags(registrationId, sigaTag);
 		if (recordFound) {
 			return true;
 		}
 
 		object.setIsValid(Boolean.FALSE);
-		// Lets the camel route tell a SIGA pause apart from a real failure, so it stops the
-		// flow instead of sending the packet to complete-as-rejected/failed (which would
-		// overwrite PAUSED).
-		if (object.getTags() == null) {
-			object.setTags(new HashMap<>());
-		}
-		object.getTags().put(SIGA_VERIFICATION_TAG, SIGA_VERIFICATION_PAUSED);
 		registrationStatusDto.setStatusCode(RegistrationStatusCode.PAUSED.name());
 		registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
 		registrationStatusDto.setStatusComment(StatusUtil.SIGA_RECORD_NOT_FOUND.getMessage());

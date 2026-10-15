@@ -2,6 +2,7 @@ package io.mosip.registrationprocessor.stages.demodedupe;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -81,6 +82,7 @@ import io.mosip.registration.processor.packet.storage.entity.IndividualDemograph
 import io.mosip.registration.processor.packet.storage.entity.ManualVerificationEntity;
 import io.mosip.registration.processor.packet.storage.repository.BasePacketRepository;
 import io.mosip.registration.processor.packet.storage.utils.ABISHandlerUtil;
+import io.mosip.registration.processor.packet.storage.utils.PacketManagerService;
 import io.mosip.registration.processor.packet.storage.utils.Utilities;
 import io.mosip.registration.processor.rest.client.audit.builder.AuditLogRequestBuilder;
 import io.mosip.registration.processor.rest.client.audit.dto.AuditResponseDto;
@@ -124,6 +126,9 @@ public class DemodedupeProcessorTest {
 
 	@Mock
 	private SigaService sigaService;
+
+	@Mock
+	private PacketManagerService packetManagerService;
 
 	@Mock
 	private InputStream inputStream;
@@ -940,6 +945,37 @@ public class DemodedupeProcessorTest {
 		Mockito.verify(registrationStatusService, Mockito.times(1)).updateRegistrationStatusForWorkflowEngine(
 				registrationStatusDto, PlatformErrorMessages.RPR_DEMO_SIGA_RECORD_NOT_FOUND.getCode(),
 				ModuleName.DEMO_DEDUPE.toString());
+		// The camel route reads this from the packet's tags to stop the flow instead of
+		// sending the packet to complete-as-rejected.
+		Mockito.verify(packetManagerService).addOrUpdateTags(registrationStatusDto.getRegistrationId(),
+				java.util.Collections.singletonMap("SIGA_VERIFICATION", "PAUSED"));
+	}
+
+	/**
+	 * A packet resumed after a manual verifier approved its SIGA no-match must not call SIGA
+	 * again (it would just be paused again) and must not have its tag overwritten.
+	 */
+	@Test
+	public void testDemoDedupeSigaManuallyApprovedSkipsSiga() throws Exception {
+		when(env.getProperty(DEMODEDUPEENABLE)).thenReturn("true");
+		byte[] b = "sds".getBytes();
+		Mockito.when(utility.getApplicantAge(anyString(), anyString(), any())).thenReturn(20);
+		PowerMockito.mockStatic(JsonUtil.class);
+		PowerMockito.mockStatic(IOUtils.class);
+		PowerMockito.when(JsonUtil.class, "inputStreamtoJavaObject", inputStream, PacketMetaInfo.class)
+				.thenReturn(packetMetaInfo);
+		PowerMockito.when(IOUtils.class, "toByteArray", inputStream).thenReturn(b);
+		Mockito.when(registrationStatusService.getRegistrationStatus(any(), any(), any(), any()))
+				.thenReturn(registrationStatusDto);
+		Mockito.when(abisHandlerUtil.getPacketStatus(any())).thenReturn(AbisConstant.PRE_ABIS_IDENTIFICATION);
+		Mockito.when(packetManagerService.getTags(any(), any()))
+				.thenReturn(java.util.Collections.singletonMap("SIGA_VERIFICATION", "MANUALLY_APPROVED"));
+
+		demodedupeProcessor.process(dto, stageName);
+
+		Mockito.verify(sigaService, Mockito.never()).isVerified(any(), any());
+		Mockito.verify(packetManagerService, Mockito.never()).addOrUpdateTags(any(), any());
+		assertNotEquals(RegistrationStatusCode.PAUSED.name(), registrationStatusDto.getStatusCode());
 	}
 
 	/**
