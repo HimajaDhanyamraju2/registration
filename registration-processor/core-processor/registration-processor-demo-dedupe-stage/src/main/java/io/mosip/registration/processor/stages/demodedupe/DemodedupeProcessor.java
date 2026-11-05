@@ -478,7 +478,7 @@ public class DemodedupeProcessor {
 
 		object.setIsValid(Boolean.FALSE);
 		registrationStatusDto.setStatusCode(RegistrationStatusCode.PAUSED.name());
-		registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.FAILED.toString());
+		registrationStatusDto.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.IN_PROGRESS.toString());
 		registrationStatusDto.setStatusComment(StatusUtil.SIGA_RECORD_NOT_FOUND.getMessage());
 		registrationStatusDto.setSubStatusCode(StatusUtil.SIGA_RECORD_NOT_FOUND.getCode());
 		description.setCode(PlatformErrorMessages.RPR_DEMO_SIGA_RECORD_NOT_FOUND.getCode());
