@@ -34,7 +34,7 @@ public enum RegistrationType {
 	/** The biometric correction. */
 	BIOMETRIC_CORRECTION,
 
-	/** The SIGA (civil registry) demographic correction. */
+	/** The SIGA demographic correction. */
 	SIGA_CORRECTION;
 
 }
