@@ -32,6 +32,9 @@ public enum RegistrationType {
 	RES_REPRINT,
 
 	/** The biometric correction. */
-	BIOMETRIC_CORRECTION;
+	BIOMETRIC_CORRECTION,
+
+	/** The SIGA (civil registry) demographic correction. */
+	SIGA_CORRECTION;
 
 }

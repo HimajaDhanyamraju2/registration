@@ -464,14 +464,14 @@ public class DemodedupeProcessor {
 					registrationId, "DemodedupeProcessor::verifyWithSiga():: packet manually approved after SIGA no-match - skipping SIGA");
 			return true;
 		}
+		// Check the applicant against SIGA. This is also true for applicants SIGA does not apply to
+		// (e.g. non-citizens), because the check skips the SIGA call for them.
 		boolean recordFound = sigaService.isVerified(registrationId, registrationStatusDto.getRegistrationType());
-		// Stored as a packet tag (not just on the message): MosipVerticleManager replaces the
-		// outgoing message's tags with the packet's tags, and the camel route reads this tag to
-		// stop the flow instead of sending the packet to complete-as-rejected (which would
-		// overwrite PAUSED). Written on every run so a stale PAUSED never outlives a later match.
+		// Save the verification result as a packet tag, so the workflow can choose the next step.
 		Map<String, String> sigaTag = new HashMap<>();
 		sigaTag.put(SIGA_VERIFICATION_TAG, recordFound ? SIGA_VERIFICATION_VERIFIED : SIGA_VERIFICATION_PAUSED);
 		packetManagerService.addOrUpdateTags(registrationId, sigaTag);
+		// Verified: continue to demographic dedupe. Otherwise, fall through and pause the packet.
 		if (recordFound) {
 			return true;
 		}
