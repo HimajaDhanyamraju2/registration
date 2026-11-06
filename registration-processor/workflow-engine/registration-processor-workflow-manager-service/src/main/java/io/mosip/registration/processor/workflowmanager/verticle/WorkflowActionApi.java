@@ -20,6 +20,7 @@ import io.mosip.registration.processor.core.abstractverticle.MosipVerticleAPIMan
 import io.mosip.registration.processor.core.code.EventId;
 import io.mosip.registration.processor.core.code.EventName;
 import io.mosip.registration.processor.core.code.EventType;
+import io.mosip.registration.processor.core.code.WorkflowActionCode;
 import io.mosip.registration.processor.core.code.ModuleName;
 import io.mosip.registration.processor.core.common.rest.dto.ErrorDTO;
 import io.mosip.registration.processor.core.exception.WorkflowActionException;
@@ -156,6 +157,7 @@ public class WorkflowActionApi extends MosipVerticleAPIManager {
 			WorkflowActionDTO workflowActionDTO = JsonUtil
 					.readValueWithUnknownProperties(obj.toString(), WorkflowActionDTO.class);
 			workflowIds = workflowActionDTO.getRequest().getWorkflowIds();
+			workflowAction = workflowActionDTO.getRequest().getWorkflowAction();
 			regProcLogger.debug("WorkflowActionApi:processURL called for registration ids {}",
 					workflowIds);
 			validator.validate(workflowActionDTO);
@@ -165,8 +167,17 @@ public class WorkflowActionApi extends MosipVerticleAPIManager {
 			if (internalRegistrationStatusDtos.size() == workflowIds.size()) {
 				for (InternalRegistrationStatusDto internalRegistrationStatusDto : internalRegistrationStatusDtos) {
 					
-						if (!internalRegistrationStatusDto.getStatusCode()
-								.equalsIgnoreCase(RegistrationStatusCode.PAUSED.name())) {
+						String statusCode = internalRegistrationStatusDto.getStatusCode();
+						boolean isPaused = RegistrationStatusCode.PAUSED.name().equalsIgnoreCase(statusCode);
+						// Decide whether this action is allowed for the packet's current status:
+						// - PAUSED: every workflow action is allowed.
+						// - PAUSED_FOR_ADDITIONAL_INFO: only STOP_PROCESSING is allowed, because the packet is
+						//   waiting for an additional info packet and resumes only when that packet is processed.
+						// - Any other status: the request is rejected with RPR_WAA_NOT_PAUSED.
+						boolean isStopOfWaitingPacket = RegistrationStatusCode.PAUSED_FOR_ADDITIONAL_INFO.name()
+								.equalsIgnoreCase(statusCode)
+								&& WorkflowActionCode.STOP_PROCESSING.name().equals(workflowAction);
+						if (!isPaused && !isStopOfWaitingPacket) {
 							description.setMessage(PlatformErrorMessages.RPR_WAA_NOT_PAUSED.getMessage());
 							updateAudit(description, internalRegistrationStatusDto.getRegistrationId(),
 								isTransactionSuccessful, user);

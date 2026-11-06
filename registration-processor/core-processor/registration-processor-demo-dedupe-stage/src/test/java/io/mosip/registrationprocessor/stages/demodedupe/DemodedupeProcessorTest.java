@@ -979,6 +979,36 @@ public class DemodedupeProcessorTest {
 	}
 
 	/**
+	 * A packet resumed after a manual verifier corrected its demographic data in adjudication
+	 * portal has tag "CORRECTED". It must call SIGA again with the corrected data, and update
+	 * the tag to VERIFIED when found.
+	 */
+	@Test
+	public void testDemoDedupeSigaCorrectedReRunsSiga() throws Exception {
+		when(env.getProperty(DEMODEDUPEENABLE)).thenReturn("true");
+		byte[] b = "sds".getBytes();
+		Mockito.when(utility.getApplicantAge(anyString(), anyString(), any())).thenReturn(20);
+		PowerMockito.mockStatic(JsonUtil.class);
+		PowerMockito.mockStatic(IOUtils.class);
+		PowerMockito.when(JsonUtil.class, "inputStreamtoJavaObject", inputStream, PacketMetaInfo.class)
+				.thenReturn(packetMetaInfo);
+		PowerMockito.when(IOUtils.class, "toByteArray", inputStream).thenReturn(b);
+		Mockito.when(registrationStatusService.getRegistrationStatus(any(), any(), any(), any()))
+				.thenReturn(registrationStatusDto);
+		Mockito.when(abisHandlerUtil.getPacketStatus(any())).thenReturn(AbisConstant.PRE_ABIS_IDENTIFICATION);
+		Mockito.when(packetManagerService.getTags(any(), any()))
+				.thenReturn(java.util.Collections.singletonMap("SIGA_VERIFICATION", "CORRECTED"));
+		Mockito.when(sigaService.isVerified(any(), any())).thenReturn(true);
+
+		demodedupeProcessor.process(dto, stageName);
+
+		Mockito.verify(sigaService, Mockito.times(1)).isVerified(any(), any());
+		Mockito.verify(packetManagerService).addOrUpdateTags(registrationStatusDto.getRegistrationId(),
+				java.util.Collections.singletonMap("SIGA_VERIFICATION", "VERIFIED"));
+		assertNotEquals(RegistrationStatusCode.PAUSED.name(), registrationStatusDto.getStatusCode());
+	}
+
+	/**
 	 * When the SIGA API keeps failing (e.g. network/5xx errors) after retries are exhausted,
 	 * the exception must propagate as a reprocess-able failure, same as any other external
 	 * API resource access failure in this stage.

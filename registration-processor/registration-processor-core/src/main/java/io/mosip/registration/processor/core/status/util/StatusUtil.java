@@ -220,7 +220,7 @@ public enum StatusUtil {
 	POTENTIAL_MATCH_FOUND(StatusConstants.DEMO_DEDUPE_MODULE_FAILED + "002", "Potential Demo Match was Found"),
 	DEMO_DEDUPE_SKIPPED(StatusConstants.DEMO_DEDUPE_MODULE_SKIPPED + "003", "Demographic Deduplication Skipped"),
 	SIGA_RECORD_NOT_FOUND(StatusConstants.DEMO_DEDUPE_MODULE_FAILED + "003",
-			"SIGA Verification Failed - No Matching Record Found, Packet Paused for Manual Verification"),
+			"SIGA - No Matching Record Found, Packet Paused for Manual Verification"),
 
 	// Manual verification stage
 	MANUAL_VERIFIER_APPROVED_PACKET(StatusConstants.MANUAL_VERIFICATION_MODULE_SUCCESS + "001",

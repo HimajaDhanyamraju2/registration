@@ -65,6 +65,8 @@ public class WorkflowActionApiTest {
 
 	private Boolean responseObject;
 
+	private String requestedWorkflowAction = "RESUME_PROCESSING";
+
 	@Mock
 	private WorkflowActionRequestValidator validator;
 
@@ -301,7 +303,7 @@ public class WorkflowActionApiTest {
 				obj.put("version", "1.0");
 				obj.put("requesttime", "2021-03-15T10:02:45.474Z");
 				JsonObject requestObject = new JsonObject();
-				requestObject.put("workflowAction", "RESUME_PROCESSING");
+				requestObject.put("workflowAction", requestedWorkflowAction);
 				List<String> workflowIds = new ArrayList<String>();
 				workflowIds.add("2018701130000410092018110735");
 				requestObject.put("workflowIds", workflowIds);
@@ -520,5 +522,22 @@ public class WorkflowActionApiTest {
 		registrationStatusDto.setStatusCode(RegistrationStatusCode.PROCESSING.name());
 		workflowActionApi.processURL(ctx);
 		assertTrue(responseObject);
+	}
+
+	/** A manual adjudicator can reject a packet that is waiting for a correction packet. */
+	@Test
+	public void testStopProcessingAllowedForPacketWaitingForAdditionalInfo() throws WorkflowActionException {
+		registrationStatusDto.setStatusCode(RegistrationStatusCode.PAUSED_FOR_ADDITIONAL_INFO.name());
+		requestedWorkflowAction = "STOP_PROCESSING";
+		workflowActionApi.processURL(ctx);
+		Mockito.verify(workflowActionService).processWorkflowAction(internalRegistrationStatusDtos, "STOP_PROCESSING");
+	}
+
+	/** A packet waiting for a correction packet cannot be resumed by hand. */
+	@Test
+	public void testResumeNotAllowedForPacketWaitingForAdditionalInfo() throws WorkflowActionException {
+		registrationStatusDto.setStatusCode(RegistrationStatusCode.PAUSED_FOR_ADDITIONAL_INFO.name());
+		workflowActionApi.processURL(ctx);
+		Mockito.verify(workflowActionService, Mockito.never()).processWorkflowAction(any(), any());
 	}
 }
